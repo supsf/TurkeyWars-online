@@ -110,6 +110,17 @@ func _restore_game_state(state: Dictionary):
 	province_owners = state.get("province_owners", {})
 	turn_index = state.get("turn_index", 0)
 	game_phase = state.get("game_phase", "picking")
+	
+	# Override with Global GameState if it has newer data from battles
+	if GameState.players.size() > 0 and GameState.province_owners.size() > 0:
+		players = GameState.players
+		province_owners = GameState.province_owners
+		turn_index = GameState.current_turn
+		game_phase = GameState.game_phase
+		
+		# Auto-save immediately to sync any battle results to disk
+		_save_session()
+
 
 func _save_session():
 	session_data["game_state"] = {
@@ -171,21 +182,58 @@ func _on_area_input_event(viewport: Node, event: InputEvent, shape_idx: int, are
 
 func _handle_province_click(province_name: String):
 	if players.size() == 0: return
-	if game_phase != "picking": return
-	
-	if not _is_province_selectable(province_name): return
-			
-	province_owners[province_name] = turn_index
-	players[turn_index]["provinces"].append(province_name)
-	
-	turn_index = int(turn_index) + 1
-	if turn_index >= players.size():
-		turn_index = 0
-		game_phase = "playing"
+
+	if game_phase == "picking":
+		if not _is_province_selectable(province_name): return
+				
+		province_owners[province_name] = turn_index
+		players[turn_index]["provinces"].append(province_name)
 		
-	_update_ui()
-	_update_colors()
-	_save_session()
+		# Log as capital if it's their first province
+		if players[turn_index]["provinces"].size() == 1:
+			GameState.capitals[turn_index] = province_name
+
+		turn_index = int(turn_index) + 1
+		if turn_index >= players.size():
+			turn_index = 0
+			game_phase = "playing"
+			
+		_update_ui()
+		_update_colors()
+		_save_session()
+	elif game_phase == "playing":
+		# Only allow attacks on adjacent provinces or owned provinces ?
+		# Actually for an attack, it must NOT be owned by the current player
+		if province_owners.get(province_name, -1) == turn_index: return
+		
+		# Check adjacency (only allowed to attack neighboring provinces of what you own)
+		var p_data = game_data.get(province_name, {})
+		var adjacencies = p_data.get("adjacencies", [])
+		var is_adjacent = false
+		for adj in adjacencies:
+			if province_owners.get(adj, -1) == turn_index:
+				is_adjacent = true
+				break
+				
+		if not is_adjacent:
+			print("Must attack an adjacent province!")
+			return
+			
+		# Sync data to game state
+		GameState.players = players
+		GameState.province_owners = province_owners
+		GameState.current_turn = turn_index
+		GameState.game_phase = game_phase
+		
+		# If attacking neutral, check default initial_army
+		var neutral_size = 10000
+		if not province_owners.has(province_name):
+			neutral_size = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
+			GameState.neutral_cities[province_name] = neutral_size
+		
+		# Start Battle
+		var def_idx = province_owners.get(province_name, -1)
+		GameState.start_battle(turn_index, def_idx, province_name)
 
 func _on_area_mouse_entered(area: Area2D):
 	_hovered_area = area
