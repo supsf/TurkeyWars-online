@@ -100,7 +100,6 @@ func _setup_hud():
 	defender_count_label.add_theme_color_override("font_color", Color(0.35, 0.55, 1.0))
 	root.add_child(defender_count_label)
 
-	var b_over = battle_ended
 func _update_team_counters():
 	if not attacker_count_label or not defender_count_label:
 		return
