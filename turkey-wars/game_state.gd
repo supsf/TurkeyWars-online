@@ -67,8 +67,8 @@ func resolve_battle(attacker_won: bool):
 		
 		# Capital taken?
 		if attack_data.is_capital and def_idx != -1:
-			players[def_idx].alive = false
-			print(players[def_idx].name + " is eliminated!")
+			players[def_idx]["alive"] = false
+			print(players[def_idx]["name"] + " is eliminated!")
 	
 	# Reset and go back to map
 	next_turn()
@@ -76,6 +76,5 @@ func resolve_battle(attacker_won: bool):
 
 func next_turn():
 	current_turn = (current_turn + 1) % players.size()
-	while not players[current_turn].alive:
+	while not players[current_turn].get("alive", true):
 		current_turn = (current_turn + 1) % players.size()
-
