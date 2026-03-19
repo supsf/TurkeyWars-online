@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://cax2ranger1"]
+
+[ext_resource type="Script" path="res://unit.gd" id="1_unit"]
+[ext_resource type="PackedScene" uid="uid://cax2projec1" path="res://projectile.tscn" id="2_proj"]
+[ext_resource type="PackedScene" path="res://assets/character_pack/RPG Characters - Nov 2020/glTF/Ranger.gltf" id="3_visual"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ranger"]
+radius = 0.4
+height = 1.8
+
+[node name="Ranger" type="CharacterBody3D"]
+script = ExtResource("1_unit")
+hp = 175.0
+attack_damage = 35.0
+attack_speed = 0.75
+attack_range = 75.0
+movement_speed = 6.0
+is_ranged = true
+is_backline = true
+projectile_scene = ExtResource("2_proj")
+anim_player_path = NodePath("Visual/AnimationPlayer")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_ranger")
+
+[node name="Visual" parent="." instance=ExtResource("3_visual")]
