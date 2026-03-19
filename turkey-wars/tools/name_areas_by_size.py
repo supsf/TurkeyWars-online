@@ -108,9 +108,9 @@ def collect_areas(element: ET.Element, inherited_fill: str | None, target_fill: 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("svg_path", type=Path)
+    parser.add_argument("svg_path", type=Path, nargs="?", default=Path("../assets/map.svg"))
     parser.add_argument("--target-color", default="#6f9c76")
-    parser.add_argument("--output-svg", type=Path, default=Path("assets/map_named_areas.svg"))
+    parser.add_argument("--output-svg", type=Path, default=Path("../assets/map_named_areas.svg"))
     args = parser.parse_args()
 
     target_fill = normalize_color(args.target_color)
