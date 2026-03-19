@@ -1,0 +1,160 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://main_menu.gd" id="1"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MainMenuPage" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/MainMenuPage"]
+layout_mode = 2
+text = "Main Menu"
+horizontal_alignment = 1
+
+[node name="NewSessionButton" type="Button" parent="CenterContainer/MainMenuPage"]
+layout_mode = 2
+text = "New Session"
+
+[node name="LoadSessionButton" type="Button" parent="CenterContainer/MainMenuPage"]
+layout_mode = 2
+text = "Load Session"
+
+[node name="SettingsButton" type="Button" parent="CenterContainer/MainMenuPage"]
+layout_mode = 2
+text = "Settings"
+
+[node name="NewSessionPage" type="VBoxContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/NewSessionPage"]
+layout_mode = 2
+text = "New Session"
+horizontal_alignment = 1
+
+[node name="NewLocalSessionButton" type="Button" parent="CenterContainer/NewSessionPage"]
+layout_mode = 2
+text = "New Local Session"
+
+[node name="NewOnlineSessionButton" type="Button" parent="CenterContainer/NewSessionPage"]
+layout_mode = 2
+text = "New Online Session"
+
+[node name="BackButton" type="Button" parent="CenterContainer/NewSessionPage"]
+layout_mode = 2
+text = "Back"
+
+[node name="NewLocalSessionPage" type="VBoxContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+text = "New Local Session"
+horizontal_alignment = 1
+
+[node name="WorldNameLabel" type="Label" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+text = "World Name:"
+
+[node name="WorldNameInput" type="LineEdit" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+placeholder_text = "Enter world name"
+
+[node name="PlayersLabel" type="Label" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+text = "Players:"
+
+[node name="PlayersContainer" type="VBoxContainer" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Player1Input" type="LineEdit" parent="CenterContainer/NewLocalSessionPage/PlayersContainer"]
+layout_mode = 2
+text = "Player1"
+
+[node name="Player2Input" type="LineEdit" parent="CenterContainer/NewLocalSessionPage/PlayersContainer"]
+layout_mode = 2
+text = "Player2"
+
+[node name="AddPlayerButton" type="Button" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+text = "Add Player"
+
+[node name="CreateWorldButton" type="Button" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+text = "Create World"
+
+[node name="BackButton" type="Button" parent="CenterContainer/NewLocalSessionPage"]
+layout_mode = 2
+text = "Back"
+
+[node name="NewOnlineSessionPage" type="VBoxContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/NewOnlineSessionPage"]
+layout_mode = 2
+text = "New Online Session"
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="CenterContainer/NewOnlineSessionPage"]
+layout_mode = 2
+text = "Back"
+
+[node name="LoadSessionPage" type="VBoxContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/LoadSessionPage"]
+layout_mode = 2
+text = "Load Session"
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="CenterContainer/LoadSessionPage"]
+layout_mode = 2
+text = "Back"
+
+[node name="SettingsPage" type="VBoxContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/SettingsPage"]
+layout_mode = 2
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="CenterContainer/SettingsPage"]
+layout_mode = 2
+text = "Back"
