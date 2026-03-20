@@ -51,8 +51,14 @@ static func _load_frames(cls: String) -> SpriteFrames:
 		sf.set_animation_loop(state, state != "die")
 		sf.set_animation_speed(state, 30.0) 
 		
-		var path = base_path + state + "/"
-		var d = DirAccess.open(path)
+		# Fallback logic: "range" unit uses "idle_attack" folder instead of "attack"!
+		var folder_name = state
+		var d = DirAccess.open(base_path + folder_name + "/")
+		if d == null and state == "attack":
+			folder_name = "idle_attack"
+			d = DirAccess.open(base_path + folder_name + "/")
+			
+		var path = base_path + folder_name + "/"
 		if d:
 			var valid_files = []
 			for f in d.get_files():
