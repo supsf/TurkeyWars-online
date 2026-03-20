@@ -25,15 +25,38 @@ var attack_timer: float = 0.0
 
 static var frames_cache = {}
 
+static var sfx_loaded = false
+static var sfx_melee = []
+static var sfx_range = []
+static var sfx_tank = []
+
+var audio_player: AudioStreamPlayer3D
+
 func _ready():
 	add_to_group("units")
-	
+
+	if not sfx_loaded:
+		sfx_melee.append(preload("res://assets/audio/sfx/melee_01.ogg"))
+		sfx_melee.append(preload("res://assets/audio/sfx/melee_02.ogg"))
+		sfx_melee.append(preload("res://assets/audio/sfx/melee_03.ogg"))
+		sfx_range.append(preload("res://assets/audio/sfx/rifle_continuous.ogg"))
+		sfx_tank.append(preload("res://assets/audio/sfx/tank_01.ogg"))
+		sfx_tank.append(preload("res://assets/audio/sfx/tank_02.ogg"))
+		sfx_loaded = true
+
+	audio_player = AudioStreamPlayer3D.new()
+	if unit_class == "melee" or unit_class == "tank":
+		audio_player.volume_db = -0.0
+	elif unit_class == "range":
+		audio_player.volume_db = -14.0
+	add_child(audio_player)
+
 	if not frames_cache.has(unit_class):
 		frames_cache[unit_class] = _load_frames(unit_class)
 	sprite.sprite_frames = frames_cache[unit_class]
-	
+
 	sprite.play("idle")
-	
+
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.2, 0.2) if team == Team.ATTACKER else Color(0.2, 0.4, 0.9)
 	team_ring.material_override = mat
@@ -108,6 +131,7 @@ func _physics_process(delta: float):
 		if attack_timer <= 0:
 			attack_timer = 1.0 / attack_speed
 			target.take_damage(attack_damage)
+			_play_attack_sfx()
 	else:
 		_change_state(State.MOVE)
 		var dir = global_position.direction_to(target.global_position)
@@ -176,3 +200,16 @@ func _die():
 	
 	await get_tree().create_timer(3.0).timeout
 	queue_free()
+
+func _play_attack_sfx():
+		if audio_player == null: return
+		var streams = []
+		if unit_class == "melee": streams = sfx_melee
+		elif unit_class == "range": streams = sfx_range
+		elif unit_class == "tank": streams = sfx_tank
+		
+		if streams.size() > 0:
+				var stream = streams[randi() % streams.size()]
+				audio_player.stream = stream
+				audio_player.pitch_scale = randf_range(0.85, 1.15)
+				audio_player.play()

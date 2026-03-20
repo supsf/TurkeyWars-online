@@ -48,7 +48,11 @@ func _setup_ui():
 		units_container.add_child(hbox)
 		
 		var name_label = Label.new()
-		name_label.text = unit_type.capitalize() + " (" + str(GameState.UNIT_COSTS[unit_type]) + ")"
+		var display_name = ""
+		if unit_type == "warrior": display_name = "Soldier"
+		elif unit_type == "ranger": display_name = "Rifleman"
+		else: display_name = "Tank"
+		name_label.text = display_name + " (" + str(GameState.UNIT_COSTS[unit_type]) + ")"
 		name_label.custom_minimum_size = Vector2(150, 0)
 		hbox.add_child(name_label)
 		
@@ -133,13 +137,13 @@ func _on_confirm():
 		if def_idx == -1:
 			# Neutral city, auto-generate and start battle
 			_generate_neutral_army()
-			get_tree().change_scene_to_file("res://battlefield.tscn")
+			get_tree().change_scene_to_file("res://new_battlefield.tscn")
 		else:
 			# Next player's turn to pick
 			_start_defender_phase()
 	else:
 		GameState.attack_data.defender_army = selected_units.duplicate()
-		get_tree().change_scene_to_file("res://battlefield.tscn")
+		get_tree().change_scene_to_file("res://new_battlefield.tscn")
 
 func _generate_neutral_army():
 	var budget = GameState.attack_data.neutral_size

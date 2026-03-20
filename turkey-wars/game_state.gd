@@ -27,7 +27,7 @@ var attack_data = {
 
 const UNIT_COSTS = {
 	"warrior": 500,
-	"ranger": 1000,
+	"ranger": 650,
 	"wizard": 2500
 }
 

@@ -3,9 +3,9 @@
 
 [node name="Soldier" instance=ExtResource("1_scene")]
 unit_class = "melee"
-hp = 150.0
+hp = 250.0
 attack_damage = 25.0
 attack_speed = 1.8
-attack_range = 1.5
+attack_range = 3.0
 movement_speed = 3.75
 default_faces_left = true

@@ -1,7 +1,24 @@
 extends Node3D
 
+# --- TEMPORARY SPAWN CONFIG (Until wired to Main Menu) ---
+@export var attacker_warrior_count: int = 50
+@export var attacker_ranger_count: int = 0
+@export var attacker_wizard_count: int = 0
+
+@export var defender_warrior_count: int = 0
+@export var defender_ranger_count: int = 0
+@export var defender_wizard_count: int = 10
+# ---------------------------------------------------------
+
+var attacker_count_label: Label
+var defender_count_label: Label
+
+var battle_ended_flag = false
+var initial_spawn_done = false
+
 func _ready() -> void:
 	# Initialize the spring afternoon environment when the scene loads
+	_setup_hud()
 	_create_spring_afternoon_environment()
 
 func _create_spring_afternoon_environment() -> void:
@@ -62,23 +79,44 @@ func _create_spring_afternoon_environment() -> void:
 	# After environment setup, spawn 2D units
 	_spawn_armies()
 
+	var bgm = AudioStreamPlayer.new()
+	var stream = preload("res://assets/audio/sfx/battle_music.ogg")
+	if stream is AudioStreamOggVorbis:
+		stream.loop = true
+	bgm.stream = stream
+	bgm.volume_db = -8.0
+	bgm.autoplay = true
+	add_child(bgm)
+
 func _spawn_armies():
 	# Allow some engine frames for things to settle
 	await get_tree().create_timer(0.2).timeout
 	
+	if GameState.attack_data.attacker_idx != -1:
+		attacker_warrior_count = GameState.attack_data.attacker_army.get("warrior", 0)
+		attacker_ranger_count = GameState.attack_data.attacker_army.get("ranger", 0)
+		attacker_wizard_count = GameState.attack_data.attacker_army.get("wizard", 0)
+		defender_warrior_count = GameState.attack_data.defender_army.get("warrior", 0)
+		defender_ranger_count = GameState.attack_data.defender_army.get("ranger", 0)
+		defender_wizard_count = GameState.attack_data.defender_army.get("wizard", 0)
+
 	# For Attacker (Team 0)
-	for i in range(5):
+	for i in range(attacker_warrior_count):
 		_spawn_unit(0, false, preload("res://soldier_2d.tscn"))
-	for i in range(5):
+	for i in range(attacker_ranger_count):
 		_spawn_unit(0, true, preload("res://rifleman_2d.tscn"))
-	_spawn_unit(0, true, preload("res://tank_2d.tscn"))
+	for i in range(attacker_wizard_count):
+		_spawn_unit(0, false, preload("res://tank_2d.tscn"))
 	
 	# For Defender (Team 1)
-	for i in range(5):
+	for i in range(defender_warrior_count):
 		_spawn_unit(1, false, preload("res://soldier_2d.tscn"))
-	for i in range(5):
+	for i in range(defender_ranger_count):
 		_spawn_unit(1, true, preload("res://rifleman_2d.tscn"))
-	_spawn_unit(1, true, preload("res://tank_2d.tscn"))
+	for i in range(defender_wizard_count):
+		_spawn_unit(1, false, preload("res://tank_2d.tscn"))
+
+	initial_spawn_done = true
 
 func _spawn_unit(team: int, is_backline: bool, scene: PackedScene):
 	var spawner_name = ""
@@ -105,3 +143,74 @@ func _spawn_unit(team: int, is_backline: bool, scene: PackedScene):
 	
 	# Set baseline spawn height appropriately based on the spawner box elevation
 	unit.global_position = spawner_node.global_position + Vector3(rx, 0, rz)
+
+
+func _setup_hud():
+	var hud_layer = CanvasLayer.new()
+	hud_layer.layer = 10
+	add_child(hud_layer)
+
+	var root = Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hud_layer.add_child(root)
+
+	attacker_count_label = Label.new()
+	attacker_count_label.text = "Attackers: 0"
+	attacker_count_label.position = Vector2(24, 14)
+	attacker_count_label.add_theme_font_size_override("font_size", 28)
+	attacker_count_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	root.add_child(attacker_count_label)
+
+	defender_count_label = Label.new()
+	defender_count_label.text = "Defenders: 0"
+	defender_count_label.anchor_left = 1.0
+	defender_count_label.anchor_right = 1.0
+	defender_count_label.offset_left = -320
+	defender_count_label.offset_right = -24
+	defender_count_label.offset_top = 14
+	defender_count_label.offset_bottom = 58
+	defender_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	defender_count_label.add_theme_font_size_override("font_size", 28)
+	defender_count_label.add_theme_color_override("font_color", Color(0.3, 0.3, 1.0))
+	root.add_child(defender_count_label)
+
+func _process(_delta: float):
+	_update_team_counters()
+
+func _update_team_counters():
+	if not attacker_count_label or not defender_count_label:
+		return
+
+	var attacker_alive = 0
+	var defender_alive = 0
+	for u in get_tree().get_nodes_in_group("units"):
+		if not is_instance_valid(u):
+			continue
+		if u.team == 0 and u.current_state != u.State.DEAD:
+			attacker_alive += 1
+		elif u.team == 1 and u.current_state != u.State.DEAD:
+			defender_alive += 1
+
+	attacker_count_label.text = "Attackers: %d" % attacker_alive
+	defender_count_label.text = "Defenders: %d" % defender_alive
+
+	if not battle_ended_flag:
+		# Need to make sure units actually spawned first
+		if initial_spawn_done:
+			if attacker_alive == 0 and defender_alive == 0:
+				call_deferred("_end_battle", false) # Draw counts as defend win for simplicity
+			elif attacker_alive == 0:
+				call_deferred("_end_battle", false)
+			elif defender_alive == 0:
+				call_deferred("_end_battle", true)
+
+func _end_battle(attacker_won: bool):
+	if battle_ended_flag: return
+	battle_ended_flag = true
+
+	print("Battle Over. Attacker Won: ", attacker_won)
+
+	# Small delay before changing scene
+	await get_tree().create_timer(3.0).timeout
+
+	GameState.resolve_battle(attacker_won)
