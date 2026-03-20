@@ -49,7 +49,8 @@ static func _load_frames(cls: String) -> SpriteFrames:
 	for state in states:
 		sf.add_animation(state)
 		sf.set_animation_loop(state, state != "die")
-		sf.set_animation_speed(state, 30.0) 
+		# Give a base 1.5x kick to the static generic animations (idle, walk, die)
+		sf.set_animation_speed(state, 45.0) 
 		
 		# Fallback logic: "range" unit uses "idle_attack" folder instead of "attack"!
 		var folder_name = state

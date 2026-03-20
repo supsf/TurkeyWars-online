@@ -5,8 +5,8 @@
 unit_class = "tank"
 hp = 1200.0
 attack_damage = 150.0
-attack_speed = 0.3
+attack_speed = 0.45
 attack_range = 80.0
-movement_speed = 1.0
+movement_speed = 1.5
 is_ranged = true
 is_backline = true

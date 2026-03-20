@@ -5,7 +5,7 @@
 unit_class = "melee"
 hp = 150.0
 attack_damage = 25.0
-attack_speed = 1.2
+attack_speed = 1.8
 attack_range = 1.5
-movement_speed = 2.5
+movement_speed = 3.75
 default_faces_left = true
