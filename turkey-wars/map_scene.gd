@@ -17,9 +17,20 @@ var game_phase: String = "picking"
 @onready var army_label = $UILayer/TooltipPanel/VBox/ArmyLabel
 @onready var player_army_label = $UILayer/TopLeftUI/PlayerArmyLabel
 
+var all_players_army_label: RichTextLabel
+
 func _ready():
 	_load_game_data()
 	_load_or_init_session()
+
+	all_players_army_label = RichTextLabel.new()
+	all_players_army_label.bbcode_enabled = true
+	all_players_army_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	all_players_army_label.offset_left = -300
+	all_players_army_label.offset_top = 10
+	all_players_army_label.offset_right = -10
+	all_players_army_label.offset_bottom = 400
+	$UILayer.add_child(all_players_army_label)
 
 	tooltip_panel.visible = false
 
@@ -110,6 +121,17 @@ func _restore_game_state(state: Dictionary):
 	province_owners = state.get("province_owners", {})
 	turn_index = state.get("turn_index", 0)
 	game_phase = state.get("game_phase", "picking")
+	
+	# Override with Global GameState if it has newer data from battles
+	if GameState.players.size() > 0 and GameState.province_owners.size() > 0:
+		players = GameState.players
+		province_owners = GameState.province_owners
+		turn_index = GameState.current_turn
+		game_phase = GameState.game_phase
+		
+		# Auto-save immediately to sync any battle results to disk
+		_save_session()
+
 
 func _save_session():
 	session_data["game_state"] = {
@@ -151,6 +173,12 @@ func _update_ui():
 		player_army_label.text = "[%s] Turn: %s | Region: %s | Army: %s" % [phase_text, p["name"], p["region"], army_str]
 		player_army_label.add_theme_color_override("font_color", Color(p["color"]))
 
+		if all_players_army_label:
+			var bbcode = "[b]Armies:[/b]\n"
+			for pp in players:
+				bbcode += "[color=#" + Color(pp["color"]).to_html(false) + "]" + pp["name"] + ": " + format_number(int(pp["army"])) + "[/color]\n"
+			all_players_army_label.text = bbcode
+
 func _is_province_selectable(province_name: String) -> bool:
 	if game_phase != "picking": return false
 	if province_owners.has(province_name): return false
@@ -171,27 +199,76 @@ func _on_area_input_event(viewport: Node, event: InputEvent, shape_idx: int, are
 
 func _handle_province_click(province_name: String):
 	if players.size() == 0: return
-	if game_phase != "picking": return
-	
-	if not _is_province_selectable(province_name): return
-			
-	province_owners[province_name] = turn_index
-	players[turn_index]["provinces"].append(province_name)
-	
-	turn_index = int(turn_index) + 1
-	if turn_index >= players.size():
-		turn_index = 0
-		game_phase = "playing"
+
+	if game_phase == "picking":
+		if not _is_province_selectable(province_name): return
+				
+		province_owners[province_name] = turn_index
+		players[turn_index]["provinces"].append(province_name)
 		
-	_update_ui()
-	_update_colors()
-	_save_session()
+		# Log as capital if it's their first province
+		if players[turn_index]["provinces"].size() == 1:
+			GameState.capitals[turn_index] = province_name
+
+		turn_index = int(turn_index) + 1
+		if turn_index >= players.size():
+			turn_index = 0
+			game_phase = "playing"
+			
+		_update_ui()
+		_update_colors()
+		_save_session()
+	elif game_phase == "playing":
+		# Only allow attacks on adjacent provinces or owned provinces ?
+		# Actually for an attack, it must NOT be owned by the current player
+		if province_owners.get(province_name, -1) == turn_index: return
+		
+		# Check adjacency (only allowed to attack neighboring provinces of what you own)
+		var p_data = game_data.get(province_name, {})
+		var adjacencies = p_data.get("adjacencies", [])
+		var is_adjacent = false
+		for adj in adjacencies:
+			if province_owners.get(adj, -1) == turn_index:
+				is_adjacent = true
+				break
+				
+		if not is_adjacent:
+			print("Must attack an adjacent province!")
+			return
+			
+		# Sync data to game state
+		GameState.players = players
+		GameState.province_owners = province_owners
+		GameState.current_turn = turn_index
+		GameState.game_phase = game_phase
+		
+		# If attacking neutral, check default initial_army
+		var neutral_size = 10000
+		if not province_owners.has(province_name):
+			neutral_size = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
+			GameState.neutral_cities[province_name] = neutral_size
+		
+		# Start Battle
+		var def_idx = province_owners.get(province_name, -1)
+		GameState.start_battle(turn_index, def_idx, province_name)
+
+func _is_neighbor(province_name: String, player_idx: int) -> bool:
+	if int(province_owners.get(province_name, -1)) == player_idx: return false
+	var p_data = game_data.get(province_name, {})
+	var adjacencies = p_data.get("adjacencies", [])
+	for adj in adjacencies:
+		if int(province_owners.get(adj, -1)) == player_idx:
+			return true
+	return false
 
 func _on_area_mouse_entered(area: Area2D):
+	var province_name = area.name
+	if game_phase == "playing" and not _is_neighbor(province_name, turn_index):
+		return
+
 	_hovered_area = area
 	_update_colors()
 
-	var province_name = area.name
 	if game_data.has(province_name):
 		var data = game_data[province_name]
 		var tooltip_owner = "None"
@@ -225,21 +302,49 @@ func _update_colors():
 	for child in get_children():
 		if child is Area2D:
 			var target_color = Color(0.7, 0.7, 0.7)
-			
+
 			if game_phase == "picking":
 				var selectable = _is_province_selectable(child.name)
 				if selectable:
 					target_color = Color(0.85, 0.85, 0.5)
 				else:
 					target_color = Color(0.4, 0.4, 0.4)
-			
-			if province_owners.has(child.name):
-				var owner_idx = int(province_owners[child.name])
-				target_color = Color(players[owner_idx]["color"])
-				
-			if child == _hovered_area:
-				target_color = target_color.lightened(0.3)
-				
+
+				if province_owners.has(child.name):
+					var owner_idx = int(province_owners[child.name])
+					var raw_col = players[owner_idx]["color"]
+					if typeof(raw_col) == TYPE_STRING:
+						target_color = Color(raw_col)
+					else:
+						target_color = raw_col
+
+				if child == _hovered_area:
+					target_color = target_color.lightened(0.3)
+			else:
+				var is_owned = province_owners.has(child.name)
+				var owner_idx = int(province_owners.get(child.name, -1))
+				var is_my_own = is_owned and owner_idx == turn_index
+				var is_neighboring = _is_neighbor(child.name, turn_index)
+				var is_capital = false
+				if is_owned and GameState.capitals.has(owner_idx):
+					is_capital = (GameState.capitals[owner_idx] == child.name)
+
+				if is_owned:
+					var raw_col = players[owner_idx]["color"]
+					if typeof(raw_col) == TYPE_STRING:
+						target_color = Color(raw_col)
+					else:
+						target_color = raw_col
+					if is_capital:
+						target_color = target_color.darkened(0.5)
+				elif is_neighboring:
+					target_color = Color.GRAY
+				else:
+					target_color = Color(0.9, 0.9, 0.9)
+
+				if child == _hovered_area and is_neighboring and not is_my_own:
+					target_color = Color.DARK_GRAY
+
 			for node in child.get_children():
 				if node is Polygon2D:
 					node.color = target_color
