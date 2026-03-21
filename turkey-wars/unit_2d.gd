@@ -15,6 +15,9 @@ enum State { IDLE, MOVE, ATTACK, DEAD }
 @export var is_backline: bool = false
 @export var default_faces_left: bool = false
 
+@export var aoe_radius: float = 0.0
+@export var aoe_damage: float = 0.0
+
 var current_state: State = State.IDLE
 var target: Node3D = null
 var attack_timer: float = 0.0
@@ -24,16 +27,23 @@ var attack_timer: float = 0.0
 @onready var coll_shape: CollisionShape3D = $CollisionShape3D
 
 static var frames_cache = {}
+static var explosion_frames: SpriteFrames = null
 
 static var sfx_loaded = false
 static var sfx_melee = []
 static var sfx_range = []
 static var sfx_tank = []
+static var sfx_rocket = []
 
 var audio_player: AudioStreamPlayer3D
 
 func _ready():
 	add_to_group("units")
+	
+	# Disable troop-to-troop collision: 
+	# Put units on layer 2, and have them only mask layer 1 (the environment/floor)
+	collision_layer = 2
+	collision_mask = 1
 
 	if not sfx_loaded:
 		sfx_melee.append(preload("res://assets/audio/sfx/melee_01.ogg"))
@@ -42,10 +52,13 @@ func _ready():
 		sfx_range.append(preload("res://assets/audio/sfx/rifle_continuous.ogg"))
 		sfx_tank.append(preload("res://assets/audio/sfx/tank_01.ogg"))
 		sfx_tank.append(preload("res://assets/audio/sfx/tank_02.ogg"))
+		# Rocket uses tank sounds for now
+		sfx_rocket.append(preload("res://assets/audio/sfx/tank_01.ogg"))
+		sfx_rocket.append(preload("res://assets/audio/sfx/tank_02.ogg"))
 		sfx_loaded = true
 
 	audio_player = AudioStreamPlayer3D.new()
-	if unit_class == "melee" or unit_class == "tank":
+	if unit_class == "melee" or unit_class == "tank" or unit_class == "rocket_launcher":
 		audio_player.volume_db = -0.0
 	elif unit_class == "range":
 		audio_player.volume_db = -14.0
@@ -55,11 +68,44 @@ func _ready():
 		frames_cache[unit_class] = _load_frames(unit_class)
 	sprite.sprite_frames = frames_cache[unit_class]
 
+	if explosion_frames == null:
+		explosion_frames = _load_explosion_frames()
+
 	sprite.play("idle")
 
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.2, 0.2) if team == Team.ATTACKER else Color(0.2, 0.4, 0.9)
 	team_ring.material_override = mat
+
+static func _load_explosion_frames() -> SpriteFrames:
+	var sf = SpriteFrames.new()
+	sf.remove_animation("default")
+	sf.add_animation("explode")
+	sf.set_animation_loop("explode", false)
+	sf.set_animation_speed("explode", 24.0)
+	
+	var path = "res://assets/explosion_sprites/"
+	var d = DirAccess.open(path)
+	if d:
+		var files = []
+		for f in d.get_files():
+			if f.ends_with(".png") or f.ends_with(".png.import"):
+				var t_name = f.replace(".import", "")
+				if not files.has(t_name):
+					files.append(t_name)
+		
+		# Sort explosion-d1, explosion-d2, etc. correctly
+		files.sort_custom(func(a, b):
+			var num_a = int(a.get_file().get_basename().replace("explosion-d", ""))
+			var num_b = int(b.get_file().get_basename().replace("explosion-d", ""))
+			return num_a < num_b
+		)
+		
+		for img in files:
+			var t = load(path + img)
+			if t:
+				sf.add_frame("explode", t)
+	return sf
 
 static func _load_frames(cls: String) -> SpriteFrames:
 	var sf = SpriteFrames.new()
@@ -131,6 +177,9 @@ func _physics_process(delta: float):
 		if attack_timer <= 0:
 			attack_timer = 1.0 / attack_speed
 			target.take_damage(attack_damage)
+			if aoe_radius > 0:
+				_apply_aoe(target.global_position)
+				_spawn_explosion(target.global_position)
 			_play_attack_sfx()
 	else:
 		_change_state(State.MOVE)
@@ -147,6 +196,29 @@ func _physics_process(delta: float):
 		sprite.flip_h = not default_faces_left
 		
 	move_and_slide()
+
+func _spawn_explosion(pos: Vector3):
+	var exp_sprite = AnimatedSprite3D.new()
+	exp_sprite.sprite_frames = explosion_frames
+	exp_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	exp_sprite.pixel_size = 0.04 # Make it large enough to see
+	exp_sprite.no_depth_test = true # Draw on top
+	exp_sprite.render_priority = 10
+	get_parent().add_child(exp_sprite)
+	exp_sprite.global_position = pos + Vector3(0, 1.0, 0) # Raise it a bit
+	exp_sprite.play("explode")
+	exp_sprite.animation_finished.connect(func(): exp_sprite.queue_free())
+
+func _apply_aoe(impact_pos: Vector3):
+	var units = get_tree().get_nodes_in_group("units")
+	for u in units:
+		if u.current_state == State.DEAD: continue
+		if u.team != self.team:
+			var d = impact_pos.distance_to(u.global_position)
+			if d <= aoe_radius:
+				# Already dealt base damage to direct target
+				if u != target:
+					u.take_damage(aoe_damage)
 
 func _change_state(new_state: State):
 	if current_state == new_state: return
@@ -173,7 +245,20 @@ func _get_closest_enemy() -> Node3D:
 	var units = get_tree().get_nodes_in_group("units")
 	var best_tgt = null
 	var min_dist = INF
-	for u in units:
+	
+	# Rocket Launcher Priority: target all "range" units first.
+	var prioritize_range = (unit_class == "rocket_launcher")
+	var range_units = []
+	
+	if prioritize_range:
+		for u in units:
+			if u.current_state == State.DEAD: continue
+			if u.team != self.team and u.unit_class == "range":
+				range_units.append(u)
+	
+	var targets_to_search = range_units if not range_units.is_empty() else units
+	
+	for u in targets_to_search:
 		if u.current_state == State.DEAD: continue
 		if u.team != self.team:
 			var d = global_position.distance_to(u.global_position)
@@ -207,6 +292,7 @@ func _play_attack_sfx():
 		if unit_class == "melee": streams = sfx_melee
 		elif unit_class == "range": streams = sfx_range
 		elif unit_class == "tank": streams = sfx_tank
+		elif unit_class == "rocket_launcher": streams = sfx_rocket
 		
 		if streams.size() > 0:
 				var stream = streams[randi() % streams.size()]

@@ -14,10 +14,12 @@ extends Control
 
 const MIN_PLAYERS := 2
 const MAX_PLAYERS := 5
-const LOCAL_SESSION_SAVE_PATH := "user://local_session.json"
-
+const SAVES_DIR := "user://saves/"
 
 func _ready() -> void:
+	if not DirAccess.dir_exists_absolute(SAVES_DIR):
+		DirAccess.make_dir_absolute(SAVES_DIR)
+		
 	$CenterContainer/MainMenuCard/CardContent/MainMenuPage/NewSessionButton.pressed.connect(_on_new_session_pressed)
 	$CenterContainer/MainMenuCard/CardContent/MainMenuPage/LoadSessionButton.pressed.connect(_on_load_session_pressed)
 	$CenterContainer/MainMenuCard/CardContent/MainMenuPage/SettingsButton.pressed.connect(_on_settings_pressed)
@@ -59,11 +61,49 @@ func _on_new_session_pressed() -> void:
 
 
 func _on_load_session_pressed() -> void:
-	if FileAccess.file_exists(LOCAL_SESSION_SAVE_PATH):
-		get_tree().change_scene_to_file("res://map_scene.tscn")
-	else:
-		push_error("No save file found!")
+	_refresh_load_session_page()
+	_show_page(load_session_page)
 
+
+func _refresh_load_session_page() -> void:
+	# Clear previous list
+	for child in load_session_page.get_children():
+		if child is Button and child.text != "← BACK":
+			child.queue_free()
+		elif child is ScrollContainer:
+			child.queue_free()
+			
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = 200
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	load_session_page.add_child(scroll)
+	load_session_page.move_child(scroll, 1) # Put between title and back button
+	
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	
+	var dir = DirAccess.open(SAVES_DIR)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if not dir.current_is_dir() and file_name.ends_with(".json"):
+				var btn := Button.new()
+				btn.text = file_name.replace(".json", "")
+				TWUIStyle.style_button(btn)
+				btn.pressed.connect(_on_save_selected.bind(SAVES_DIR + file_name))
+				list.add_child(btn)
+			file_name = dir.get_next()
+	else:
+		var lbl := Label.new()
+		lbl.text = "No saves found"
+		TWUIStyle.style_label_muted(lbl)
+		list.add_child(lbl)
+
+func _on_save_selected(path: String) -> void:
+	GameState.last_save_path = path
+	get_tree().change_scene_to_file("res://map_scene.tscn")
 
 func _on_settings_pressed() -> void:
 	_show_page(settings_page)
@@ -121,18 +161,27 @@ func _on_create_world_pressed() -> void:
 			if player_input != null:
 				players.append(player_input.text)
 
+	var world_name = world_name_input.text.strip_edges()
+	if world_name == "":
+		world_name = "unnamed_world"
+		
+	var safe_name = world_name.validate_filename()
+	var save_path = SAVES_DIR + safe_name + ".json"
+
 	var session_data := {
-		"world_name": world_name_input.text,
+		"world_name": world_name,
 		"players": players,
 	}
 
-	var save_file := FileAccess.open(LOCAL_SESSION_SAVE_PATH, FileAccess.WRITE)
+	var save_file := FileAccess.open(save_path, FileAccess.WRITE)
 	if save_file == null:
-		push_error("Failed to save session data to %s" % LOCAL_SESSION_SAVE_PATH)
+		push_error("Failed to save session data to %s" % save_path)
 		return
 
 	save_file.store_string(JSON.stringify(session_data, "\t"))
 	save_file.close()
+	
+	GameState.last_save_path = save_path
 	get_tree().change_scene_to_file("res://map_scene.tscn")
 
 

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://difwsdpej7144"]
+
+[ext_resource type="Script" uid="uid://bmcxl5f166iwn" path="res://sim_battlefield.gd" id="1"]
+
+[node name="SimBattlefield" type="Node" unique_id=847977875]
+script = ExtResource("1")

@@ -19,17 +19,20 @@ var attack_data = {
 	"attacker_idx": -1,
 	"defender_idx": -1, # -1 if neutral
 	"province": "",
-	"attacker_army": {"warrior": 0, "ranger": 0, "wizard": 0},
-	"defender_army": {"warrior": 0, "ranger": 0, "wizard": 0},
+	"attacker_army": {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0},
+	"defender_army": {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0},
 	"is_capital": false,
 	"neutral_size": 0
 }
 
 const UNIT_COSTS = {
-	"warrior": 500,
-	"ranger": 650,
-	"wizard": 2500
+	"warrior": 350,
+	"ranger": 700,
+	"wizard": 2500,
+	"rocket_launcher": 2500
 }
+
+var last_save_path = "user://saves/default.json"
 
 func start_battle(attacker, defender, prov):
 	attack_data.attacker_idx = attacker

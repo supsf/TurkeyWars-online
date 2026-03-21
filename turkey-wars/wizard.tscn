@@ -10,7 +10,7 @@ height = 1.8
 
 [node name="Wizard" type="CharacterBody3D"]
 script = ExtResource("1_unit")
-hp = 350.0
+hp = 656.0
 attack_damage = 150.0
 attack_speed = 0.75
 attack_range = 50.0

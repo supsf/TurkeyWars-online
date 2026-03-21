@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://cx6g3kav433b6"]
+[ext_resource type="PackedScene" uid="uid://cx6g3kav433b5" path="res://game_unit_2d.tscn" id="1_scene"]
+
+[node name="RocketLauncher" instance=ExtResource("1_scene")]
+unit_class = "rocket_launcher"
+hp = 300.0
+attack_damage = 75.0
+attack_speed = 0.33
+attack_range = 50.0
+movement_speed = 3.0
+is_ranged = true
+is_backline = true
+default_faces_left = true
+aoe_radius = 4.0
+aoe_damage = 25.0

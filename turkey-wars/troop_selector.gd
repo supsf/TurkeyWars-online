@@ -18,7 +18,8 @@ var initial_budget = 0
 var selected_units = {
 	"warrior": 0,
 	"ranger": 0,
-	"wizard": 0
+	"wizard": 0,
+	"rocket_launcher": 0
 }
 
 var unit_labels = {}
@@ -108,6 +109,7 @@ func _setup_ui():
 	var unit_defs := [
 		["warrior", "SOLDIER"],
 		["ranger",  "RIFLEMAN"],
+		["rocket_launcher", "ROCKET"],
 		["wizard",  "TANK"],
 	]
 	for i in unit_defs.size():
@@ -237,7 +239,7 @@ func _start_defender_phase():
 	_update_ui()
 
 func _reset_selection():
-	selected_units = {"warrior": 0, "ranger": 0, "wizard": 0}
+	selected_units = {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0}
 
 func _on_unit_plus(unit_type):
 	var cost = GameState.UNIT_COSTS[unit_type]
@@ -268,7 +270,9 @@ func _update_ui():
 			unit_minus_buttons[unit_type].disabled = selected_units[unit_type] <= 0
 
 	# Confirm allowed only if the player picked at least one unit.
-	var selected_total: int = int(selected_units["warrior"]) + int(selected_units["ranger"]) + int(selected_units["wizard"])
+	var selected_total: int = 0
+	for count in selected_units.values():
+		selected_total += count
 	confirm_button.disabled = selected_total <= 0
 
 func _on_confirm():
@@ -289,20 +293,37 @@ func _on_confirm():
 
 func _generate_neutral_army():
 	var budget = GameState.attack_data.neutral_size
-	var army = {"warrior": 0, "ranger": 0, "wizard": 0}
+	var army = {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0}
 	
-	# Randomly distribute budget
-	var types = ["warrior", "ranger", "wizard"]
+	# Weighted distribution based on cost (cheaper units are more likely)
+	var types = ["warrior", "ranger", "wizard", "rocket_launcher"]
 	while true:
 		var affordable = []
+		var weights = []
+		var total_weight = 0.0
+		
 		for t in types:
-			if GameState.UNIT_COSTS[t] <= budget:
+			var cost = GameState.UNIT_COSTS[t]
+			if cost <= budget:
 				affordable.append(t)
+				# Weight is inversely proportional to cost
+				var w = 1.0 / float(cost)
+				weights.append(w)
+				total_weight += w
 		
 		if affordable.is_empty():
 			break
 			
-		var chosen = affordable[randi() % affordable.size()]
+		var roll = randf() * total_weight
+		var cumulative_weight = 0.0
+		var chosen = affordable[0]
+		
+		for i in range(affordable.size()):
+			cumulative_weight += weights[i]
+			if roll <= cumulative_weight:
+				chosen = affordable[i]
+				break
+				
 		army[chosen] += 1
 		budget -= GameState.UNIT_COSTS[chosen]
 		

@@ -1,7 +1,5 @@
 extends Node2D
 
-const LOCAL_SESSION_SAVE_PATH := "user://local_session.json"
-
 var _hovered_area: Area2D = null
 var game_data: Dictionary = {}
 var session_data: Dictionary = {}
@@ -57,13 +55,6 @@ func _setup_map_background() -> void:
 
 
 func _setup_camera() -> void:
-	# Camera2D centered so Turkey fills the left portion of the screen,
-	# leaving the right 360 px clear for the Armies panel.
-	# Map bounding box: x 45–955 (width 909), y 19–403. Center ≈ (500, 211).
-	# With zoom 0.80, map-area center is screen (396, 324).
-	# Camera must show world (500, 211) at screen (396, 324):
-	#   cam.position.x = 500 + (576 - 396) / 0.80 = 725
-	#   cam.position.y = 211 + (324 - 324) / 0.80 = 211
 	var cam := Camera2D.new()
 	cam.position = Vector2(725.0, 211.0)
 	cam.zoom     = Vector2(0.80, 0.80)
@@ -75,7 +66,7 @@ func _setup_map_hud() -> void:
 	# TopLeft status card — gold accent marks the active-turn panel.
 	TWUIStyle.style_panel_container_accent($UILayer/TopLeftUI)
 	TWUIStyle.style_label(player_army_label, true)
-	player_army_label.add_theme_font_size_override("font_size", 15)
+	player_army_label.add_theme_font_size_override("font_size", 28)
 
 	# Tooltip card.
 	TWUIStyle.style_tooltip(tooltip_panel)
@@ -111,12 +102,22 @@ func _build_armies_panel() -> void:
 	rtl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(rtl)
 	TWUIStyle.style_rich_text(rtl)
+	rtl.add_theme_font_size_override("normal_font_size", 18)
+
+	# --- Add Return to Main Menu Button ---
+	var menu_btn := Button.new()
+	menu_btn.text = "RETURN TO MAIN MENU"
+	menu_btn.custom_minimum_size.y = 40
+	TWUIStyle.style_button(menu_btn)
+	menu_btn.pressed.connect(_on_main_menu_pressed)
+	vbox.add_child(menu_btn)
+	# --------------------------------------
+
+func _on_main_menu_pressed() -> void:
+	get_tree().change_scene_to_file("res://main_menu.tscn")
 
 func _process(_delta: float) -> void:
 	if tooltip_panel.visible:
-		# Tooltip lives in UILayer (CanvasLayer = screen space).
-		# Use get_viewport().get_mouse_position() for screen coords,
-		# not get_global_mouse_position() which returns world coords.
 		tooltip_panel.global_position = get_viewport().get_mouse_position() + Vector2(10, 10)
 
 func _load_game_data():
@@ -134,9 +135,10 @@ func _load_game_data():
 
 func _load_or_init_session():
 	var player_names = ["Player1", "Player2"]
+	var save_path = GameState.last_save_path
 	
-	if FileAccess.file_exists(LOCAL_SESSION_SAVE_PATH):
-		var file = FileAccess.open(LOCAL_SESSION_SAVE_PATH, FileAccess.READ)
+	if FileAccess.file_exists(save_path):
+		var file = FileAccess.open(save_path, FileAccess.READ)
 		var json = JSON.new()
 		if json.parse(file.get_as_text()) == OK:
 			session_data = json.data
@@ -152,6 +154,7 @@ func _load_or_init_session():
 func _init_new_game_state(player_names: Array):
 	players = []
 	province_owners.clear()
+	GameState.capitals.clear()
 	turn_index = 0
 	game_phase = "picking"
 	
@@ -191,6 +194,7 @@ func _init_new_game_state(player_names: Array):
 func _restore_game_state(state: Dictionary):
 	players = state.get("players", [])
 	province_owners = state.get("province_owners", {})
+	GameState.capitals = state.get("capitals", {})
 	turn_index = state.get("turn_index", 0)
 	game_phase = state.get("game_phase", "picking")
 	
@@ -198,6 +202,8 @@ func _restore_game_state(state: Dictionary):
 	if GameState.players.size() > 0 and GameState.province_owners.size() > 0:
 		players = GameState.players
 		province_owners = GameState.province_owners
+		# capitals is already in GameState, we might want to sync back if state had it
+		# but GameState is the authority for battle results.
 		turn_index = GameState.current_turn
 		game_phase = GameState.game_phase
 		
@@ -209,10 +215,11 @@ func _save_session():
 	session_data["game_state"] = {
 		"players": players,
 		"province_owners": province_owners,
+		"capitals": GameState.capitals,
 		"turn_index": turn_index,
 		"game_phase": game_phase
 	}
-	var file = FileAccess.open(LOCAL_SESSION_SAVE_PATH, FileAccess.WRITE)
+	var file = FileAccess.open(GameState.last_save_path, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(session_data, "	"))
 		file.close()
@@ -240,15 +247,16 @@ func get_strength_text_and_color(strength: int) -> Array:
 func _update_ui():
 	if players.size() > 0:
 		var p = players[turn_index]
-		var phase_text = "Picking Phase" if game_phase == "picking" else "Playing Phase"
-		var army_str = format_number(int(p["army"]))
-		player_army_label.text = "[%s] Turn: %s | Region: %s | Army: %s" % [phase_text, p["name"], p["region"], army_str]
+		player_army_label.text = "%s's Turn" % p["name"]
 		player_army_label.add_theme_color_override("font_color", Color(p["color"]))
 
 		if all_players_army_label:
-			var bbcode = "[b]Armies:[/b]\n"
+			var bbcode = ""
 			for pp in players:
-				bbcode += "[color=#" + Color(pp["color"]).to_html(false) + "]" + pp["name"] + ": " + format_number(int(pp["army"])) + "[/color]\n"
+				var color_hex = Color(pp["color"]).to_html(false)
+				var army_val = format_number(int(pp["army"]))
+				bbcode += "[color=#%s]%s:[/color]\n" % [color_hex, pp["name"]]
+				bbcode += "[font_size=32][b]%s[/b][/font_size]\n\n" % army_val
 			all_players_army_label.text = bbcode
 
 func _is_province_selectable(province_name: String) -> bool:
@@ -265,74 +273,81 @@ func _is_province_selectable(province_name: String) -> bool:
 		if province_owners.has(adj) and province_owners[adj] != turn_index: return false
 	return true
 
-func _on_area_input_event(viewport: Node, event: InputEvent, shape_idx: int, area: Area2D):
+func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, area: Area2D):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		_handle_province_click(area.name)
-
-func _handle_province_click(province_name: String):
-	if players.size() == 0: return
-
-	if game_phase == "picking":
-		if not _is_province_selectable(province_name): return
-				
-		province_owners[province_name] = turn_index
-		players[turn_index]["provinces"].append(province_name)
-
-		var who = players[turn_index]["name"]
-		_show_toast("%s claimed %s" % [who, province_name])
+		var province_name = area.name
 		
-		# Log as capital if it's their first province
-		if players[turn_index]["provinces"].size() == 1:
-			GameState.capitals[turn_index] = province_name
-
-		turn_index = int(turn_index) + 1
-		if turn_index >= players.size():
-			turn_index = 0
-			game_phase = "playing"
+		if game_phase == "picking":
+			if not _is_province_selectable(province_name): return
 			
-		_update_ui()
-		_update_colors()
-		_save_session()
-	elif game_phase == "playing":
-		# Only allow attacks on adjacent provinces or owned provinces ?
-		# Actually for an attack, it must NOT be owned by the current player
-		if province_owners.get(province_name, -1) == turn_index: return
-		
-		# Check adjacency (only allowed to attack neighboring provinces of what you own)
-		var p_data = game_data.get(province_name, {})
-		var adjacencies = p_data.get("adjacencies", [])
-		var is_adjacent = false
-		for adj in adjacencies:
-			if province_owners.get(adj, -1) == turn_index:
-				is_adjacent = true
-				break
+			province_owners[province_name] = turn_index
+			if not GameState.capitals.has(turn_index):
+				GameState.capitals[turn_index] = province_name
+
+			turn_index = (turn_index + 1) % players.size()
+			if turn_index == 0:
+				game_phase = "playing"
 				
-		if not is_adjacent:
-			print("Must attack an adjacent province!")
-			return
+			_update_ui()
+			_update_colors()
+			_save_session()
+		elif game_phase == "playing":
+			if province_owners.get(province_name, -1) == turn_index: return
 			
-		# Sync data to game state
-		GameState.players = players
-		GameState.province_owners = province_owners
-		GameState.current_turn = turn_index
-		GameState.game_phase = game_phase
+			var p_data = game_data.get(province_name, {})
+			if not _is_neighbor(province_name, turn_index):
+				print("Must attack an adjacent province!")
+				return
+				
+			var neutral_size = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
+			var defender_size_for_ratio = 0
+			var def_idx = province_owners.get(province_name, -1)
+
+			if def_idx == -1:
+				defender_size_for_ratio = neutral_size
+				GameState.neutral_cities[province_name] = neutral_size
+			else:
+				defender_size_for_ratio = int(players[def_idx].get("army", 0))
+
+			var attacker_size = int(players[turn_index].get("army", 0))
+			var ratio = float(defender_size_for_ratio) / float(attacker_size) if attacker_size > 0 else 999.0
+			var is_blitz = false
+			if def_idx == -1 and ratio < 0.6:
+				is_blitz = true
+			elif def_idx != -1 and ratio < 0.4:
+				is_blitz = true
+
+			if is_blitz:
+				_instant_conquer(province_name, def_idx, neutral_size)
+				return
+			
+			GameState.players = players
+			GameState.province_owners = province_owners
+			GameState.current_turn = turn_index
+			GameState.game_phase = game_phase
+			
+			var defender_name: String
+			if def_idx == -1:
+				defender_name = "Neutral"
+			else:
+				defender_name = str(players[def_idx]["name"])
+			_show_toast("Battle: %s vs %s" % [players[turn_index]["name"], defender_name])
+			GameState.start_battle(turn_index, def_idx, province_name)
+
+func _instant_conquer(province_name: String, def_idx: int, neutral_size: int) -> void:
+	var attacker_name = players[turn_index]["name"]
+	_show_toast("BLITZ! %s instantly conquers %s" % [attacker_name, province_name])
+	
+	province_owners[province_name] = turn_index
+	players[turn_index]["army"] += int(neutral_size * 0.1)
+	
+	turn_index = (turn_index + 1) % players.size()
+	while not players[turn_index].get("alive", true):
+		turn_index = (turn_index + 1) % players.size()
 		
-		# If attacking neutral, check default initial_army
-		var neutral_size = 10000
-		if not province_owners.has(province_name):
-			neutral_size = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
-			GameState.neutral_cities[province_name] = neutral_size
-		
-		# Start Battle
-		var def_idx = province_owners.get(province_name, -1)
-		var defender_name: String
-		if def_idx == -1:
-			defender_name = "Neutral"
-		else:
-			# Ensure we always end up with a string for toast formatting.
-			defender_name = str(players[def_idx]["name"])
-		_show_toast("Battle: %s vs %s" % [players[turn_index]["name"], defender_name])
-		GameState.start_battle(turn_index, def_idx, province_name)
+	_update_ui()
+	_update_colors()
+	_save_session()
 
 func _is_neighbor(province_name: String, player_idx: int) -> bool:
 	if int(province_owners.get(province_name, -1)) == player_idx: return false
@@ -376,11 +391,9 @@ func _on_area_mouse_entered(area: Area2D):
 
 
 func _setup_toast() -> void:
-	# Top-center transient banner.
 	_toast_panel = PanelContainer.new()
 	_toast_panel.name = "ToastPanel"
 	_toast_panel.visible = false
-	# Godot's layout_mode is numeric; avoid relying on missing enum constants.
 	_toast_panel.layout_mode = 1
 	_toast_panel.anchor_left = 0.5
 	_toast_panel.anchor_right = 0.5
@@ -434,9 +447,10 @@ func _update_colors():
 				if selectable:
 					target_color = Color(0.85, 0.85, 0.5)
 				else:
-					target_color = Color(0.4, 0.4, 0.4)
-
-				if province_owners.has(child.name):
+					target_color = Color(0.3, 0.3, 0.3)
+				
+				var is_owned = province_owners.has(child.name)
+				if is_owned:
 					var owner_idx = int(province_owners[child.name])
 					var raw_col = players[owner_idx]["color"]
 					if typeof(raw_col) == TYPE_STRING:

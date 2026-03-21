@@ -4,16 +4,25 @@ extends Node3D
 @export var attacker_warrior_count: int = 50
 @export var attacker_ranger_count: int = 0
 @export var attacker_wizard_count: int = 0
+@export var attacker_rocket_launcher_count: int = 0
 
 @export var defender_warrior_count: int = 0
 @export var defender_ranger_count: int = 0
 @export var defender_wizard_count: int = 10
+@export var defender_rocket_launcher_count: int = 0
 # ---------------------------------------------------------
 
 var attacker_count_label: Label
 var defender_count_label: Label
 var battle_result_panel: PanelContainer
 var battle_result_label: Label
+
+# Detailed unit count labels
+var attacker_unit_labels = {} # class -> Label
+var defender_unit_labels = {} # class -> Label
+
+var win_slider: ProgressBar
+var target_win_ratio: float = 0.5
 
 var battle_ended_flag = false
 var initial_spawn_done = false
@@ -98,15 +107,20 @@ func _spawn_armies():
 		attacker_warrior_count = GameState.attack_data.attacker_army.get("warrior", 0)
 		attacker_ranger_count = GameState.attack_data.attacker_army.get("ranger", 0)
 		attacker_wizard_count = GameState.attack_data.attacker_army.get("wizard", 0)
+		attacker_rocket_launcher_count = GameState.attack_data.attacker_army.get("rocket_launcher", 0)
+
 		defender_warrior_count = GameState.attack_data.defender_army.get("warrior", 0)
 		defender_ranger_count = GameState.attack_data.defender_army.get("ranger", 0)
 		defender_wizard_count = GameState.attack_data.defender_army.get("wizard", 0)
+		defender_rocket_launcher_count = GameState.attack_data.defender_army.get("rocket_launcher", 0)
 
 	# For Attacker (Team 0)
 	for i in range(attacker_warrior_count):
 		_spawn_unit(0, false, preload("res://soldier_2d.tscn"))
 	for i in range(attacker_ranger_count):
 		_spawn_unit(0, true, preload("res://rifleman_2d.tscn"))
+	for i in range(attacker_rocket_launcher_count):
+		_spawn_unit(0, true, preload("res://rocket_launcher_2d.tscn"))
 	for i in range(attacker_wizard_count):
 		_spawn_unit(0, false, preload("res://tank_2d.tscn"))
 	
@@ -115,6 +129,8 @@ func _spawn_armies():
 		_spawn_unit(1, false, preload("res://soldier_2d.tscn"))
 	for i in range(defender_ranger_count):
 		_spawn_unit(1, true, preload("res://rifleman_2d.tscn"))
+	for i in range(defender_rocket_launcher_count):
+		_spawn_unit(1, true, preload("res://rocket_launcher_2d.tscn"))
 	for i in range(defender_wizard_count):
 		_spawn_unit(1, false, preload("res://tank_2d.tscn"))
 
@@ -156,77 +172,103 @@ func _setup_hud():
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hud_layer.add_child(root)
 
-	# Left card: attackers — gold left-accent with big red count.
+	var attacker_name = "ATTACKERS"
+	var defender_name = "DEFENDERS"
+	if GameState.attack_data.attacker_idx != -1:
+		attacker_name = GameState.players[GameState.attack_data.attacker_idx].name.to_upper()
+		var def_idx = GameState.attack_data.defender_idx
+		if def_idx != -1:
+			defender_name = GameState.players[def_idx].name.to_upper()
+		else:
+			defender_name = GameState.attack_data.province.to_upper()
+
+	# Left card: attackers
 	var attacker_card := PanelContainer.new()
-	attacker_card.anchor_left = 0.0
-	attacker_card.anchor_right = 0.0
-	attacker_card.anchor_top = 0.0
-	attacker_card.anchor_bottom = 0.0
 	attacker_card.offset_left = 20
-	attacker_card.offset_top = 14
-	attacker_card.offset_right = 240
-	attacker_card.offset_bottom = 130
+	attacker_card.offset_top = 20
+	attacker_card.offset_right = 350
+	attacker_card.offset_bottom = 220
 	root.add_child(attacker_card)
 	TWUIStyle.style_panel_container_accent(attacker_card)
 
 	var attacker_vbox := VBoxContainer.new()
-	attacker_vbox.add_theme_constant_override("separation", 4)
+	attacker_vbox.add_theme_constant_override("separation", 2)
 	attacker_card.add_child(attacker_vbox)
 
-	var attackers_title := Label.new()
-	attackers_title.text = "ATTACKERS"
-	TWUIStyle.style_label_muted(attackers_title)
-	attacker_vbox.add_child(attackers_title)
+	var attackers_title_lbl := Label.new()
+	attackers_title_lbl.text = attacker_name
+	TWUIStyle.style_label(attackers_title_lbl, true)
+	attackers_title_lbl.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_RED)
+	attackers_title_lbl.add_theme_font_size_override("font_size", 48)
+	attacker_vbox.add_child(attackers_title_lbl)
 
-	attacker_count_label = Label.new()
-	attacker_count_label.text = "0"
-	TWUIStyle.style_label(attacker_count_label, true)
-	attacker_count_label.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_RED)
-	attacker_count_label.add_theme_font_size_override("font_size", 42)
-	attacker_vbox.add_child(attacker_count_label)
+	attacker_unit_labels = _create_unit_breakdown(attacker_vbox, TWUIStyle.COLOR_ACCENT_RED)
 
-	# Right card: defenders — blue accent with big blue count.
+	# Right card: defenders
 	var defender_card := PanelContainer.new()
 	defender_card.anchor_left = 1.0
 	defender_card.anchor_right = 1.0
-	defender_card.anchor_top = 0.0
-	defender_card.anchor_bottom = 0.0
-	defender_card.offset_left = -240
-	defender_card.offset_top = 14
+	defender_card.offset_left = -350
+	defender_card.offset_top = 20
 	defender_card.offset_right = -20
-	defender_card.offset_bottom = 130
+	defender_card.offset_bottom = 220
 	root.add_child(defender_card)
 	var def_card_sb := TWUIStyle.make_card_accent_stylebox()
 	def_card_sb.border_color = TWUIStyle.COLOR_ACCENT_BLUE
 	defender_card.add_theme_stylebox_override("panel", def_card_sb)
 
 	var defender_vbox := VBoxContainer.new()
-	defender_vbox.add_theme_constant_override("separation", 4)
+	defender_vbox.add_theme_constant_override("separation", 2)
 	defender_card.add_child(defender_vbox)
 
-	var defenders_title := Label.new()
-	defenders_title.text = "DEFENDERS"
-	TWUIStyle.style_label_muted(defenders_title)
-	defender_vbox.add_child(defenders_title)
+	var defenders_title_lbl := Label.new()
+	defenders_title_lbl.text = defender_name
+	defenders_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	TWUIStyle.style_label(defenders_title_lbl, true)
+	defenders_title_lbl.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_BLUE)
+	defenders_title_lbl.add_theme_font_size_override("font_size", 48)
+	defender_vbox.add_child(defenders_title_lbl)
 
-	defender_count_label = Label.new()
-	defender_count_label.text = "0"
-	TWUIStyle.style_label(defender_count_label, true)
-	defender_count_label.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_BLUE)
-	defender_count_label.add_theme_font_size_override("font_size", 42)
-	defender_vbox.add_child(defender_count_label)
+	defender_unit_labels = _create_unit_breakdown(defender_vbox, TWUIStyle.COLOR_ACCENT_BLUE, true)
 
-	# Battle result banner — centered, fades in on victory.
+	# Win Indicator Slider at the top - Fixed centering and size
+	win_slider = ProgressBar.new()
+	win_slider.custom_minimum_size = Vector2(300, 10)
+	win_slider.show_percentage = false
+	win_slider.value = 50
+	win_slider.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	win_slider.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	win_slider.offset_top = 24
+	root.add_child(win_slider)
+	
+	var sb_bg = StyleBoxFlat.new()
+	sb_bg.bg_color = TWUIStyle.COLOR_ACCENT_BLUE
+	sb_bg.corner_radius_top_left = 6
+	sb_bg.corner_radius_top_right = 6
+	sb_bg.corner_radius_bottom_left = 6
+	sb_bg.corner_radius_bottom_right = 6
+	
+	var sb_fg = StyleBoxFlat.new()
+	sb_fg.bg_color = TWUIStyle.COLOR_ACCENT_RED
+	sb_fg.corner_radius_top_left = 6
+	sb_fg.corner_radius_top_right = 6
+	sb_fg.corner_radius_bottom_left = 6
+	sb_fg.corner_radius_bottom_right = 6
+	
+	win_slider.add_theme_stylebox_override("background", sb_bg)
+	win_slider.add_theme_stylebox_override("fill", sb_fg)
+
+	# Battle result banner
 	battle_result_panel = PanelContainer.new()
 	battle_result_panel.visible = false
 	battle_result_panel.anchor_left = 0.5
 	battle_result_panel.anchor_right = 0.5
-	battle_result_panel.anchor_top = 0.0
-	battle_result_panel.anchor_bottom = 0.0
-	battle_result_panel.offset_left = -380
-	battle_result_panel.offset_right = 380
-	battle_result_panel.offset_top = 120
-	battle_result_panel.offset_bottom = 210
+	battle_result_panel.anchor_top = 0.5
+	battle_result_panel.anchor_bottom = 0.5
+	battle_result_panel.offset_left = -300
+	battle_result_panel.offset_right = 300
+	battle_result_panel.offset_top = -50
+	battle_result_panel.offset_bottom = 50
 	root.add_child(battle_result_panel)
 	TWUIStyle.style_panel_container_accent(battle_result_panel)
 
@@ -236,38 +278,94 @@ func _setup_hud():
 	battle_result_label = Label.new()
 	battle_result_label.text = "VICTORY"
 	TWUIStyle.style_label(battle_result_label, true)
-	battle_result_label.add_theme_font_size_override("font_size", 32)
+	battle_result_label.add_theme_font_size_override("font_size", 64)
 	battle_result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_vbox.add_child(battle_result_label)
 
-func _process(_delta: float):
+func _create_unit_breakdown(parent: Node, color: Color, align_right: bool = false) -> Dictionary:
+	var labels = {}
+	var types = [
+		["melee", "Soldiers"],
+		["range", "Riflemen"],
+		["rocket_launcher", "Rocketeers"],
+		["tank", "Tanks"]
+	]
+	
+	for type_info in types:
+		var type = type_info[0]
+		var display = type_info[1]
+		
+		var hbox = HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 8)
+		if align_right: hbox.alignment = BoxContainer.ALIGNMENT_END
+		parent.add_child(hbox)
+		
+		var name_lbl = Label.new()
+		name_lbl.text = display
+		TWUIStyle.style_label_muted(name_lbl)
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		
+		var count_lbl = Label.new()
+		count_lbl.text = "0"
+		TWUIStyle.style_label(count_lbl, true)
+		count_lbl.add_theme_font_size_override("font_size", 18)
+		count_lbl.add_theme_color_override("font_color", color)
+		
+		if align_right:
+			hbox.add_child(count_lbl)
+			hbox.add_child(name_lbl)
+		else:
+			hbox.add_child(name_lbl)
+			hbox.add_child(count_lbl)
+			
+		labels[type] = count_lbl
+		
+	return labels
+
+func _process(delta: float):
 	_update_team_counters()
+	if win_slider:
+		win_slider.value = lerp(win_slider.value, target_win_ratio * 100.0, delta * 2.0)
 
 func _update_team_counters():
-	if not attacker_count_label or not defender_count_label:
+	if not attacker_unit_labels or not defender_unit_labels:
 		return
 
-	var attacker_alive = 0
-	var defender_alive = 0
-	for u in get_tree().get_nodes_in_group("units"):
-		if not is_instance_valid(u):
-			continue
-		if u.team == 0 and u.current_state != u.State.DEAD:
-			attacker_alive += 1
-		elif u.team == 1 and u.current_state != u.State.DEAD:
-			defender_alive += 1
+	var attacker_counts = {"melee": 0, "range": 0, "rocket_launcher": 0, "tank": 0}
+	var defender_counts = {"melee": 0, "range": 0, "rocket_launcher": 0, "tank": 0}
+	
+	var attacker_total = 0
+	var defender_total = 0
 
-	attacker_count_label.text = "%d" % attacker_alive
-	defender_count_label.text = "%d" % defender_alive
+	for u in get_tree().get_nodes_in_group("units"):
+		if not is_instance_valid(u) or u.current_state == u.State.DEAD:
+			continue
+			
+		if u.team == 0:
+			attacker_counts[u.unit_class] += 1
+			attacker_total += 1
+		else:
+			defender_counts[u.unit_class] += 1
+			defender_total += 1
+
+	for type in attacker_counts:
+		attacker_unit_labels[type].text = str(attacker_counts[type])
+	for type in defender_counts:
+		defender_unit_labels[type].text = str(defender_counts[type])
+
+	var total = attacker_total + defender_total
+	if total > 0:
+		target_win_ratio = float(attacker_total) / float(total)
+	else:
+		target_win_ratio = 0.5
 
 	if not battle_ended_flag:
-		# Need to make sure units actually spawned first
 		if initial_spawn_done:
-			if attacker_alive == 0 and defender_alive == 0:
-				call_deferred("_end_battle", false) # Draw counts as defend win for simplicity
-			elif attacker_alive == 0:
+			if attacker_total == 0 and defender_total == 0:
 				call_deferred("_end_battle", false)
-			elif defender_alive == 0:
+			elif attacker_total == 0:
+				call_deferred("_end_battle", false)
+			elif defender_total == 0:
 				call_deferred("_end_battle", true)
 
 func _end_battle(attacker_won: bool):
@@ -279,7 +377,7 @@ func _end_battle(attacker_won: bool):
 	_show_battle_result(attacker_won)
 
 	# Small delay before changing scene
-	await get_tree().create_timer(3.0).timeout
+	await get_tree().create_timer(4.0).timeout
 
 	GameState.resolve_battle(attacker_won)
 
@@ -292,11 +390,11 @@ func _show_battle_result(attacker_won: bool) -> void:
 	battle_result_panel.modulate.a = 0.0
 
 	if attacker_won:
-		battle_result_label.text = "Attackers Victory"
+		battle_result_label.text = "VICTORY"
 		battle_result_label.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_RED)
 	else:
-		battle_result_label.text = "Defenders Victory"
+		battle_result_label.text = "DEFEAT"
 		battle_result_label.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_BLUE)
 
 	var tween := create_tween()
-	tween.tween_property(battle_result_panel, "modulate:a", 1.0, 0.18)
+	tween.tween_property(battle_result_panel, "modulate:a", 1.0, 0.25)
