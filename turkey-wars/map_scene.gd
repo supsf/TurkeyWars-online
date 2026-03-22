@@ -253,10 +253,15 @@ func _update_ui():
 		if all_players_army_label:
 			var bbcode = ""
 			for pp in players:
+				var is_alive = pp.get("alive", true)
 				var color_hex = Color(pp["color"]).to_html(false)
 				var army_val = format_number(int(pp["army"]))
-				bbcode += "[color=#%s]%s:[/color]\n" % [color_hex, pp["name"]]
-				bbcode += "[font_size=32][b]%s[/b][/font_size]\n\n" % army_val
+				
+				if is_alive:
+					bbcode += "[color=#%s]%s:[/color]\n" % [color_hex, pp["name"]]
+					bbcode += "[font_size=32][b]%s[/b][/font_size]\n\n" % army_val
+				else:
+					bbcode += "[color=#888888][s]%s[/s][/color] [font_size=14][i](ELIMINATED)[/i][/font_size]\n\n" % pp["name"]
 			all_players_army_label.text = bbcode
 
 func _is_province_selectable(province_name: String) -> bool:
@@ -284,9 +289,17 @@ func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, a
 			if not GameState.capitals.has(turn_index):
 				GameState.capitals[turn_index] = province_name
 
-			turn_index = (turn_index + 1) % players.size()
+			# Move to next picker
+			GameState.players = players
+			GameState.province_owners = province_owners
+			GameState.next_turn()
+			
+			# Sync back local turn_index
+			turn_index = GameState.current_turn
+			
 			if turn_index == 0:
 				game_phase = "playing"
+				GameState.game_phase = game_phase
 				
 			_update_ui()
 			_update_colors()
@@ -341,9 +354,25 @@ func _instant_conquer(province_name: String, def_idx: int, neutral_size: int) ->
 	province_owners[province_name] = turn_index
 	players[turn_index]["army"] += int(neutral_size * 0.1)
 	
-	turn_index = (turn_index + 1) % players.size()
-	while not players[turn_index].get("alive", true):
-		turn_index = (turn_index + 1) % players.size()
+	# Check if we captured a capital via Blitz
+	if def_idx != -1:
+		var is_cap = (GameState.capitals.get(def_idx) == province_name)
+		if is_cap:
+			players[def_idx]["alive"] = false
+			print(players[def_idx]["name"] + " eliminated by Blitz!")
+			
+			# Neutralize remaining lands
+			var to_clear = []
+			for p in province_owners:
+				if province_owners[p] == def_idx and p != province_name:
+					to_clear.append(p)
+			for p in to_clear:
+				province_owners.erase(p)
+
+	GameState.players = players
+	GameState.province_owners = province_owners
+	GameState.next_turn()
+	turn_index = GameState.current_turn
 		
 	_update_ui()
 	_update_colors()

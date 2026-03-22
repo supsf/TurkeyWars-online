@@ -65,19 +65,41 @@ func resolve_battle(attacker_won: bool):
 	if attacker_won:
 		province_owners[prov] = att_idx
 		players[att_idx].army += bonus
-		if def_idx != -1 and not attack_data.is_capital:
-			players[def_idx].army -= bonus
 		
-		# Capital taken?
-		if attack_data.is_capital and def_idx != -1:
-			players[def_idx]["alive"] = false
-			print(players[def_idx]["name"] + " is eliminated!")
+		# If we defeated another player
+		if def_idx != -1:
+			if not attack_data.is_capital:
+				players[def_idx].army -= bonus
+			else:
+				# Capital taken! Eliminate the player.
+				players[def_idx]["alive"] = false
+				print(players[def_idx]["name"] + " is eliminated!")
+				
+				# All their other cities turn neutral
+				var provinces_to_clear = []
+				for p_name in province_owners:
+					if province_owners[p_name] == def_idx and p_name != prov:
+						provinces_to_clear.append(p_name)
+				
+				for p_name in provinces_to_clear:
+					province_owners.erase(p_name)
 	
 	# Reset and go back to map
 	next_turn()
 	get_tree().change_scene_to_file("res://map_scene.tscn")
 
 func next_turn():
+	# Ensure we don't get stuck if somehow no one is alive
+	var alive_count = 0
+	for p in players:
+		if p.get("alive", true):
+			alive_count += 1
+	
+	if alive_count <= 1:
+		# Game over logic could go here, but for now just advance
+		current_turn = (current_turn + 1) % players.size()
+		return
+
 	current_turn = (current_turn + 1) % players.size()
 	while not players[current_turn].get("alive", true):
 		current_turn = (current_turn + 1) % players.size()

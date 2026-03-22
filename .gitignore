@@ -1,0 +1,5 @@
+turkey-wars/build/
+*.exe
+*.pck
+*.console.exe
+.godot/
