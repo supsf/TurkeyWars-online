@@ -21,6 +21,7 @@ enum State { IDLE, MOVE, ATTACK, DEAD }
 var current_state: State = State.IDLE
 var target: Node3D = null
 var attack_timer: float = 0.0
+var target_update_timer: float = 0.0 # Optimization: only find target periodically
 
 @onready var sprite: AnimatedSprite3D = $AnimatedSprite3D
 @onready var team_ring: MeshInstance3D = $TeamRing
@@ -158,12 +159,17 @@ func _physics_process(delta: float):
 	if not is_on_floor():
 		velocity.y -= 9.8 * delta
 		
-	target = _get_closest_enemy()
+	target_update_timer -= delta
+	if target_update_timer <= 0:
+		target_update_timer = randf_range(0.1, 0.15) # Stagger updates across units
+		target = _get_closest_enemy()
+
 	if not target:
 		_change_state(State.IDLE)
 		velocity.x = 0
 		velocity.z = 0
-		move_and_slide()
+		if not is_on_floor():
+			move_and_slide()
 		return
 		
 	var dist = global_position.distance_to(target.global_position)
@@ -246,17 +252,17 @@ func _get_closest_enemy() -> Node3D:
 	var best_tgt = null
 	var min_dist = INF
 	
-	# Rocket Launcher Priority: target all "range" units first.
+	# Rocket Launcher Priority: target "range" (Rifleman) units first.
 	var prioritize_range = (unit_class == "rocket_launcher")
-	var range_units = []
+	var preferred_units = []
 	
 	if prioritize_range:
 		for u in units:
 			if u.current_state == State.DEAD: continue
 			if u.team != self.team and u.unit_class == "range":
-				range_units.append(u)
+				preferred_units.append(u)
 	
-	var targets_to_search = range_units if not range_units.is_empty() else units
+	var targets_to_search = preferred_units if not preferred_units.is_empty() else units
 	
 	for u in targets_to_search:
 		if u.current_state == State.DEAD: continue

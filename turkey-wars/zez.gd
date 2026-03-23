@@ -44,7 +44,7 @@ func _create_spring_afternoon_environment() -> void:
 	# Spring lighting: Bright, clear, with a slight late-afternoon warmth
 	sun.light_color = Color(1.0, 0.92, 0.82)
 	sun.light_energy = 1.2
-	sun.shadow_enabled = true
+	sun.shadow_enabled = false
 	sun.shadow_blur = 1.5 # Soften shadows for a clear spring day
 	
 	add_child(sun)
@@ -74,10 +74,12 @@ func _create_spring_afternoon_environment() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.05
 	
-	# Optional: Very subtle volumetric fog to simulate slight spring pollen/atmosphere
-	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.002 # Extremely low density to keep it "clear"
-	env.volumetric_fog_albedo = Color(0.85, 0.90, 0.95)
+	# Explicitly disable expensive effects for optimization
+	env.volumetric_fog_enabled = false
+	env.ssao_enabled = false
+	env.ssil_enabled = false
+	env.sdfgi_enabled = false
+	env.glow_enabled = false
 
 	# 5. Attach to a WorldEnvironment Node
 	var world_env := WorldEnvironment.new()

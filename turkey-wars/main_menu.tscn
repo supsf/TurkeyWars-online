@@ -50,6 +50,10 @@ layout_mode = 2
 text = "Main Menu"
 horizontal_alignment = 1
 
+[node name="SinglePlayerButton" type="Button" parent="CenterContainer/MainMenuCard/CardContent/MainMenuPage" unique_id=1948089181]
+layout_mode = 2
+text = "Single Player"
+
 [node name="NewSessionButton" type="Button" parent="CenterContainer/MainMenuCard/CardContent/MainMenuPage" unique_id=1948089180]
 layout_mode = 2
 text = "New Session"
@@ -61,6 +65,45 @@ text = "Load Session"
 [node name="SettingsButton" type="Button" parent="CenterContainer/MainMenuCard/CardContent/MainMenuPage" unique_id=188078282]
 layout_mode = 2
 text = "Settings"
+
+[node name="SinglePlayerPage" type="VBoxContainer" parent="CenterContainer/MainMenuCard/CardContent" unique_id=877070864]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832773]
+layout_mode = 2
+text = "Single Player"
+horizontal_alignment = 1
+
+[node name="PlayerNameLabel" type="Label" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832774]
+layout_mode = 2
+text = "Commander Name:"
+
+[node name="PlayerNameInput" type="LineEdit" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832775]
+layout_mode = 2
+placeholder_text = "Enter your name"
+text = "Commander"
+
+[node name="BotCountLabel" type="Label" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832776]
+layout_mode = 2
+text = "Number of Bots (1-4):"
+
+[node name="BotCountSlider" type="HSlider" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832777]
+layout_mode = 2
+min_value = 1.0
+max_value = 4.0
+value = 2.0
+tick_count = 4
+ticks_on_borders = true
+
+[node name="StartSinglePlayerButton" type="Button" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832778]
+layout_mode = 2
+text = "Deploy to War"
+
+[node name="BackButton" type="Button" parent="CenterContainer/MainMenuCard/CardContent/SinglePlayerPage" unique_id=885832779]
+layout_mode = 2
+text = "Back"
 
 [node name="NewSessionPage" type="VBoxContainer" parent="CenterContainer/MainMenuCard/CardContent" unique_id=877070863]
 visible = false
@@ -183,6 +226,21 @@ theme_override_constants/separation = 12
 layout_mode = 2
 text = "Settings"
 horizontal_alignment = 1
+
+[node name="ResolutionLabel" type="Label" parent="CenterContainer/MainMenuCard/CardContent/SettingsPage" unique_id=1521902261]
+layout_mode = 2
+text = "Resolution"
+
+[node name="ResolutionOption" type="OptionButton" parent="CenterContainer/MainMenuCard/CardContent/SettingsPage" unique_id=1521902262]
+layout_mode = 2
+
+[node name="FullscreenLabel" type="Label" parent="CenterContainer/MainMenuCard/CardContent/SettingsPage" unique_id=1521902263]
+layout_mode = 2
+text = "Display Mode"
+
+[node name="FullscreenCheck" type="CheckButton" parent="CenterContainer/MainMenuCard/CardContent/SettingsPage" unique_id=1521902264]
+layout_mode = 2
+text = "Full Screen"
 
 [node name="BackButton" type="Button" parent="CenterContainer/MainMenuCard/CardContent/SettingsPage" unique_id=1620953946]
 layout_mode = 2

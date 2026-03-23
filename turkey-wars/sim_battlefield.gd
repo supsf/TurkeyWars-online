@@ -5,10 +5,10 @@ const BUDGET: float = 50000.0
 const MAX_TICKS: int = 5000 # Safety timeout
 const SAVE_PATH: String = "user://balance_sim_results.json"
 
-var melee_cost: float = 350.0
-var ranged_cost: float = 700.0
-var tank_cost: float = 2500.0
-var rocket_cost: float = 1250.0
+var melee_cost: float = 280.0
+var ranged_cost: float = 550.0
+var tank_cost: float = 2000.0
+var rocket_cost: float = 1700.0
 
 var battles_run: int = 0
 var results: Array = []
@@ -17,30 +17,30 @@ var is_simulating: bool = true
 # Updated stats as per request
 var stats = {
 	"melee": {
-		"hp": 275.0,   # +40% (200 * 1.4)
-		"damage": 50, 
-		"rate": 0.7,
+		"hp": 125.0,
+		"damage": 50.0, 
+		"rate": 1.0 / 1.43,
 		"range": 2.0,
-		"speed": 3.0
+		"speed": 4.5
 	},
 	"ranged": {
-		"hp": 175.0,
+		"hp": 200.0,
 		"damage": 35.0,
-		"rate": 0.7,
+		"rate": 1.0 / 1.43,
 		"range": 25.0,
 		"speed": 3.0
 	},
 	"tank": {
 		"hp": 1500.0,
 		"damage": 300.0,
-		"rate": 2.0,
+		"rate": 1.0 / 0.5,
 		"range": 7.0,
 		"speed": 6.0
 	},
 	"rocket": {
 		"hp": 300.0,
-		"damage": 75.0,
-		"rate": 3.0,
+		"damage": 50.0,
+		"rate": 1.0 / 0.33,
 		"range": 50.0,
 		"speed": 3.0,
 		"aoe_radius": 4.0,
@@ -171,7 +171,7 @@ func _find_best_target(u: SimUnit, all_units: Array) -> SimUnit:
 	var best_dist = 999999.0
 	var best_target: SimUnit = null
 	
-	# Rocket Priority logic
+	# Rocket Priority logic: target "ranged" (riflemen) units first
 	var prioritize_ranged = (u.type == "rocket")
 	var ranged_enemies = []
 	if prioritize_ranged:

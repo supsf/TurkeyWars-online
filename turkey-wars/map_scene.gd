@@ -19,8 +19,10 @@ var game_phase: String = "picking"
 
 var _toast_panel: PanelContainer
 var _toast_label: Label
+var _is_bot_acting: bool = false
 
 func _ready():
+	_is_bot_acting = false # Reset on scene load/return
 	_load_game_data()
 	_load_or_init_session()
 
@@ -56,8 +58,9 @@ func _setup_map_background() -> void:
 
 func _setup_camera() -> void:
 	var cam := Camera2D.new()
-	cam.position = Vector2(725.0, 211.0)
-	cam.zoom     = Vector2(0.80, 0.80)
+	# Shift camera RIGHT (move map LEFT visually) and reduce zoom
+	cam.position = Vector2(600.0, 220.0)
+	cam.zoom     = Vector2(1.5, 1.5)
 	add_child(cam)
 	cam.make_current()
 
@@ -135,6 +138,7 @@ func _load_game_data():
 
 func _load_or_init_session():
 	var player_names = ["Player1", "Player2"]
+	var players_info = [] # Array of {name, is_bot}
 	var save_path = GameState.last_save_path
 	
 	if FileAccess.file_exists(save_path):
@@ -142,16 +146,21 @@ func _load_or_init_session():
 		var json = JSON.new()
 		if json.parse(file.get_as_text()) == OK:
 			session_data = json.data
-			if session_data.has("players") and session_data["players"].size() > 0:
+			if session_data.has("players_info"):
+				players_info = session_data["players_info"]
+				player_names = []
+				for p in players_info:
+					player_names.append(p["name"])
+			elif session_data.has("players") and session_data["players"].size() > 0:
 				player_names = session_data["players"]
 			
 			if session_data.has("game_state"):
 				_restore_game_state(session_data["game_state"])
 				return
 				
-	_init_new_game_state(player_names)
+	_init_new_game_state(player_names, players_info)
 
-func _init_new_game_state(player_names: Array):
+func _init_new_game_state(player_names: Array, players_info: Array = []):
 	print("[DEBUG MapScene] Initializing NEW Game State.")
 	players = []
 	province_owners.clear()
@@ -159,7 +168,6 @@ func _init_new_game_state(player_names: Array):
 	GameState.players = [] # CLEAR IT
 	turn_index = 0
 	game_phase = "picking"
-	# ...
 
 	var num_players = clampi(player_names.size(), 2, 5)
 	var region_key = str(num_players)
@@ -173,10 +181,24 @@ func _init_new_game_state(player_names: Array):
 				available_regions.append(r)
 				
 	available_regions.shuffle()
-	player_names.shuffle()
 	
+	# If we don't have players_info (local multiplayer), create it
+	if players_info.is_empty():
+		for p_name in player_names:
+			players_info.append({"name": p_name, "is_bot": false})
+	else:
+		# If it's single player, the first one is the human, but we might want to shuffle the rest
+		# Actually, let's keep the human first if they are at index 0
+		var human = players_info[0]
+		var bots = players_info.slice(1)
+		bots.shuffle()
+		players_info = [human] + bots
+
 	for i in range(num_players):
-		var p_name = player_names[i]
+		var p_info = players_info[i]
+		var p_name = p_info["name"]
+		var is_bot = p_info.get("is_bot", false)
+		
 		var hue = float(i) / float(num_players)
 		var c = Color.from_hsv(hue, 0.7, 0.9)
 		
@@ -190,7 +212,8 @@ func _init_new_game_state(player_names: Array):
 			"color": c.to_html(false),
 			"army": 35000,
 			"provinces": [],
-			"alive": true
+			"alive": true,
+			"is_bot": is_bot
 		})
 	
 	# Sync GameState
@@ -202,20 +225,32 @@ func _init_new_game_state(player_names: Array):
 	_save_session()
 
 func _restore_game_state(state: Dictionary):
-	print("[DEBUG MapScene] Restoring Game State.")
-	players = state.get("players", [])
-	province_owners = state.get("province_owners", {})
-	GameState.capitals = state.get("capitals", {})
-	turn_index = state.get("turn_index", 0)
-	game_phase = state.get("game_phase", "picking")
+	print("!!! [DEBUG CRITICAL] RESTORE GAME STATE CALLED !!!")
+	print("!!! Persistent GameState Players Count: ", GameState.players.size())
 	
-	# Override with Global GameState
-	if GameState.players.size() > 0 and GameState.province_owners.size() > 0:
+	if GameState.players.size() > 0:
+		print("!!! Using PERSISTENT GameState (Battle Return) !!!")
 		players = GameState.players
 		province_owners = GameState.province_owners
 		turn_index = GameState.current_turn
 		game_phase = GameState.game_phase
-		_save_session()
+	else:
+		print("!!! Using JSON GameState (Initial Load) !!!")
+		players = state.get("players", [])
+		province_owners = state.get("province_owners", {})
+		GameState.capitals = state.get("capitals", {})
+		turn_index = state.get("turn_index", 0)
+		game_phase = state.get("game_phase", "picking")
+		
+		# Sync Global GameState
+		GameState.players = players
+		GameState.province_owners = province_owners
+		GameState.current_turn = turn_index
+		GameState.game_phase = game_phase
+
+	for i in range(players.size()):
+		var p = players[i]
+		print("!!! Player [", i, "]: ", p.name, " | BotFlag: ", p.get("is_bot", "MISSING"), " | Alive: ", p.alive)
 
 
 func _save_session():
@@ -254,7 +289,9 @@ func get_strength_text_and_color(strength: int) -> Array:
 func _update_ui():
 	if players.size() > 0:
 		var p = players[turn_index]
-		player_army_label.text = p["name"] + tr("'s Turn")
+		print("!!! [DEBUG UI] Current Turn Index: ", turn_index, " | Name: ", p.name, " | IsBot: ", p.get("is_bot", "MISSING"))
+		
+		player_army_label.text = tr(p["name"]) + tr("'s Turn")
 		player_army_label.add_theme_color_override("font_color", Color(p["color"]))
 
 		if all_players_army_label:
@@ -266,11 +303,192 @@ func _update_ui():
 				var army_val = format_number(int(pp["army"]))
 				
 				if is_alive:
-					bbcode += "[color=#%s]%s:[/color]\n" % [color_hex, pp["name"]]
-					bbcode += "[font_size=32][b]%s[/b][/font_size]\n\n" % army_val
+					# Significantly larger text for the sidebar
+					bbcode += "[font_size=28][color=#%s]%s:[/color][/font_size]\n" % [color_hex, pp["name"]]
+					bbcode += "[font_size=64][b]%s[/b][/font_size]\n\n" % army_val
 				else:
-					bbcode += "[color=#888888][s]%s[/s][/color] [font_size=14][i](" + tr("ELIMINATED") + ")[/i][/font_size]\n\n" % pp["name"]
+					bbcode += "[color=#888888][s]%s[/s][/color] [font_size=16][i](%s)[/i][/font_size]\n\n" % [pp["name"], tr("ELIMINATED")]
 			all_players_army_label.text = bbcode
+		
+		# Trigger Bot Turn if applicable
+		if p.get("is_bot", false) and not _is_bot_acting:
+			print("!!! [DEBUG UI] BOT TURN DETECTED - TRIGGERING BOT BRAIN !!!")
+			_run_bot_turn()
+
+func _run_bot_turn():
+	print("!!! [BOT BRAIN] STARTING LOGIC FOR: ", players[turn_index].name, " (index ", turn_index, ") !!!")
+	_is_bot_acting = true
+	# Re-verify it is still a bot's turn before starting logic (sanity check)
+	var p = players[turn_index]
+	if not p.get("is_bot", false):
+		print("!!! [BOT BRAIN] ABORTED - Player is NOT a bot: ", p.name)
+		_is_bot_acting = false
+		return
+		
+	print("!!! [BOT BRAIN] Waiting for delay... !!!")
+	await get_tree().create_timer(1.2).timeout
+	
+	# Check again after timer (sanity check for turn changes during timer)
+	p = players[turn_index]
+	if not p.get("is_bot", false):
+		print("!!! [BOT BRAIN] ABORTED (After Timer) - Player is NOT a bot: ", p.name)
+		_is_bot_acting = false
+		return
+
+	print("!!! [BOT BRAIN] Executing Action in phase: ", game_phase, " !!!")
+	if game_phase == "picking":
+		var selectable_provinces = []
+		for child in get_children():
+			if child is Area2D and _is_province_selectable(child.name):
+				selectable_provinces.append(child.name)
+		
+		if selectable_provinces.size() > 0:
+			var picked = selectable_provinces.pick_random()
+			_execute_pick(picked)
+	
+	elif game_phase == "playing":
+		var target_prov = _get_bot_target_province()
+		if target_prov != "":
+			print("!!! [BOT BRAIN] Attacking Province: ", target_prov, " !!!")
+			_execute_attack(target_prov)
+		else:
+			print("!!! [BOT BRAIN] No targets found. Passing. !!!")
+			_is_bot_acting = false # RESET BEFORE TURN CHANGE
+			GameState.next_turn()
+			turn_index = GameState.current_turn
+			_update_ui()
+			return
+
+	_is_bot_acting = false
+
+func _execute_pick(province_name: String):
+	print("[DEBUG MapScene] Bot Picks: ", province_name)
+	province_owners[province_name] = turn_index
+	if not GameState.capitals.has(turn_index):
+		GameState.capitals[turn_index] = province_name
+
+	GameState.players = players
+	GameState.province_owners = province_owners
+	GameState.next_turn()
+	turn_index = GameState.current_turn
+	
+	if turn_index == 0:
+		game_phase = "playing"
+		GameState.game_phase = game_phase
+		
+	_is_bot_acting = false # RESET BEFORE UI UPDATE
+	_update_ui()
+	_update_colors()
+	_save_session()
+
+func _execute_attack(province_name: String):
+	var p_data = game_data.get(province_name, {})
+	var city_val = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
+	var defender_size_for_ratio = 0
+	var def_idx = province_owners.get(province_name, -1)
+
+	if def_idx == -1:
+		defender_size_for_ratio = city_val
+		GameState.neutral_cities[province_name] = city_val
+	else:
+		defender_size_for_ratio = int(players[def_idx].get("army", 0))
+
+	var attacker_size = int(players[turn_index].get("army", 0))
+	var ratio = float(defender_size_for_ratio) / float(attacker_size) if attacker_size > 0 else 999.0
+	var is_blitz = false
+	if def_idx == -1 and ratio < 0.6:
+		is_blitz = true
+	elif def_idx != -1 and ratio < 0.4:
+		is_blitz = true
+
+	if is_blitz:
+		_instant_conquer(province_name, def_idx, city_val)
+		return
+	
+	# Bot simulation check
+	var is_attacker_bot = players[turn_index].get("is_bot", false)
+	var is_defender_bot = true if def_idx == -1 else players[def_idx].get("is_bot", false)
+
+	if is_attacker_bot and is_defender_bot:
+		# Bot vs Bot (or Bot vs Neutral) can be simulated
+		print("[DEBUG MapScene] Bot vs Bot/Neutral: Simulating Battle.")
+		GameState.simulate_battle(turn_index, def_idx, province_name, city_val)
+		return
+
+	GameState.players = players
+	GameState.province_owners = province_owners
+	GameState.current_turn = turn_index
+	GameState.game_phase = game_phase
+	
+	var defender_name: String
+	if def_idx == -1:
+		defender_name = "Neutral"
+	else:
+		defender_name = str(players[def_idx]["name"])
+	
+	_show_toast(tr("Bot Battle: %s vs %s") % [players[turn_index]["name"], defender_name])
+	GameState.start_battle(turn_index, def_idx, province_name, city_val)
+
+func _get_bot_target_province() -> String:
+	var bot_army = players[turn_index].army
+	
+	var neighbors = []
+	for child in get_children():
+		if child is Area2D and _is_neighbor(child.name, turn_index):
+			neighbors.append(child.name)
+	
+	if neighbors.is_empty(): return ""
+
+	var neutral_targets = []
+	var enemy_non_capitals = []
+	var enemy_capitals = []
+
+	for prov in neighbors:
+		var owner_idx = province_owners.get(prov, -1)
+		if owner_idx == -1:
+			neutral_targets.append(prov)
+		else:
+			# robust capital check
+			var cap_name = GameState.capitals.get(owner_idx, GameState.capitals.get(str(owner_idx), ""))
+			var is_cap = (cap_name == prov)
+			if is_cap: enemy_capitals.append(prov)
+			else: enemy_non_capitals.append(prov)
+
+	# PRIORITY 1: Neutral cities are the safest expansion
+	if neutral_targets.size() > 0:
+		# Pick the one with the smallest army for easiest expansion, or just pick random
+		# Let's pick the "Best Neutral" (biggest one we can safely take)
+		var best_neutral = ""
+		var max_neutral_army = -1
+		for prov in neutral_targets:
+			var n_army = GameState.neutral_cities.get(prov, 10000)
+			# If we can blitz it, that's top priority
+			if n_army < bot_army * 0.6:
+				return prov
+			if n_army < bot_army and n_army > max_neutral_army:
+				max_neutral_army = n_army
+				best_neutral = prov
+		
+		if best_neutral != "":
+			return best_neutral
+
+	# PRIORITY 2: Weak Enemy Player Check (if no safe neutrals)
+	var weak_enemy_provinces = []
+	for prov in enemy_non_capitals:
+		var owner_idx = province_owners[prov]
+		if players[owner_idx].army < bot_army * 0.4: # Only if we can blitz
+			return prov
+		if players[owner_idx].army < bot_army:
+			weak_enemy_provinces.append(prov)
+	
+	if weak_enemy_provinces.size() > 0:
+		return weak_enemy_provinces.pick_random()
+
+	# PRIORITY 3: Capital Attack (if army is massive and no other choice)
+	if bot_army > 100000 and enemy_capitals.size() > 0:
+		return enemy_capitals.pick_random()
+			
+	return ""
 
 func _is_province_selectable(province_name: String) -> bool:
 	if game_phase != "picking": return false
@@ -280,7 +498,8 @@ func _is_province_selectable(province_name: String) -> bool:
 	if p_data.is_empty(): return false
 	var region_key = str(players.size())
 	var p_region = p_data.get("regions", {}).get(region_key, "")
-	if p["region"] != "Any" and p_region != p["region"]: return false
+	var p_region_assigned = p.get("region", "Any")
+	if p_region_assigned != "Any" and p_region != p_region_assigned: return false
 	var adjacencies = p_data.get("adjacencies", [])
 	for adj in adjacencies:
 		if province_owners.has(adj) and province_owners[adj] != turn_index: return false
@@ -288,6 +507,14 @@ func _is_province_selectable(province_name: String) -> bool:
 
 func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, area: Area2D):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		var p = players[turn_index]
+		var bot_flag = p.get("is_bot", false)
+		print("!!! [INPUT] Click on ", area.name, " | Current Turn: ", p.name, " | Index: ", turn_index, " | IsBot: ", bot_flag, " | BotActing: ", _is_bot_acting, " !!!")
+		
+		if bot_flag or _is_bot_acting:
+			print("!!! [INPUT] BLOCKING CLICK - Not your turn commander! !!!")
+			return
+			
 		var province_name = area.name
 		
 		if game_phase == "picking":
@@ -317,13 +544,13 @@ func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, a
 				_show_toast(tr("MUST_ATTACK_ADJACENT"))
 				return
 				
-			var neutral_size = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
+			var city_val = int(p_data.get("initial_army", p_data.get("Initial_Army", 10000)))
 			var defender_size_for_ratio = 0
 			var def_idx = province_owners.get(province_name, -1)
 
 			if def_idx == -1:
-				defender_size_for_ratio = neutral_size
-				GameState.neutral_cities[province_name] = neutral_size
+				defender_size_for_ratio = city_val
+				GameState.neutral_cities[province_name] = city_val
 			else:
 				defender_size_for_ratio = int(players[def_idx].get("army", 0))
 
@@ -336,7 +563,7 @@ func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, a
 				is_blitz = true
 
 			if is_blitz:
-				_instant_conquer(province_name, def_idx, neutral_size)
+				_instant_conquer(province_name, def_idx, city_val)
 				return
 			
 			GameState.players = players
@@ -350,16 +577,20 @@ func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, a
 			else:
 				defender_name = str(players[def_idx]["name"])
 			_show_toast(tr("Battle: %s vs %s") % [players[turn_index]["name"], defender_name])
-			GameState.start_battle(turn_index, def_idx, province_name)
+			GameState.start_battle(turn_index, def_idx, province_name, city_val)
 
-func _instant_conquer(province_name: String, def_idx: int, neutral_size: int) -> void:
+func _instant_conquer(province_name: String, def_idx: int, city_val: int) -> void:
 	var attacker_name = players[turn_index]["name"]
 	_show_toast(tr("BLITZ! %s instantly conquers %s") % [attacker_name, province_name])
 	
 	province_owners[province_name] = turn_index
-	players[turn_index]["army"] += int(neutral_size * 0.1)
+	var bonus = int(city_val * 0.1)
+	players[turn_index]["army"] += bonus
 	
 	if def_idx != -1:
+		players[def_idx]["army"] -= bonus
+		if players[def_idx]["army"] < 0: players[def_idx]["army"] = 0
+
 		var is_cap = (GameState.capitals.get(def_idx) == province_name)
 		if is_cap:
 			players[def_idx]["alive"] = false
@@ -373,6 +604,7 @@ func _instant_conquer(province_name: String, def_idx: int, neutral_size: int) ->
 
 	GameState.players = players
 	GameState.province_owners = province_owners
+	_is_bot_acting = false # Reset flag before turn change
 	GameState.next_turn()
 	turn_index = GameState.current_turn
 		

@@ -12,8 +12,8 @@ albedo_color = Color(1, 1, 1, 1)
 [sub_resource type="TorusMesh" id="TorusMesh_ring"]
 inner_radius = 0.45
 outer_radius = 0.6
-rings = 16
-ring_segments = 8
+rings = 8
+ring_segments = 4
 
 [node name="GameUnit2D" type="CharacterBody3D"]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
@@ -25,6 +25,7 @@ shape = SubResource("CapsuleShape3D_unit")
 
 [node name="AnimatedSprite3D" type="AnimatedSprite3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+cast_shadow = 0
 pixel_size = 0.015
 billboard = 1
 double_sided = false
@@ -32,5 +33,6 @@ alpha_cut = 1
 
 [node name="TeamRing" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.02, 0, 0, 0, 1, 0, 0.05, 0)
+cast_shadow = 0
 mesh = SubResource("TorusMesh_ring")
 surface_material_override/0 = SubResource("StandardMaterial3D_ring")

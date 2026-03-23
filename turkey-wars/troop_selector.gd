@@ -216,35 +216,89 @@ func _setup_ui():
 func _start_attacker_phase():
 	is_attacker_phase = true
 	var att_idx = GameState.attack_data.attacker_idx
-	title_label.text = tr("%s's Attack Force") % GameState.players[att_idx].name
+	var p = GameState.players[att_idx]
+	title_label.text = tr("%s's Attack Force") % p.name
 	if phase_label:
 		phase_label.text = tr("ATTACKER")
 		phase_label.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_RED)
 
-	initial_budget = GameState.players[att_idx].army
+	initial_budget = p.army
 	current_budget = initial_budget
 
 	_reset_selection()
 	_update_ui()
+	
+	if p.get("is_bot", false):
+		print("[DEBUG TroopSelector] Attacker is BOT. Auto-selecting...")
+		_auto_select_bot_army()
+		await get_tree().create_timer(1.0).timeout
+		_on_confirm()
 
 
 func _start_defender_phase():
 	is_attacker_phase = false
 	var def_idx = GameState.attack_data.defender_idx
+	var p = GameState.players[def_idx]
 	if phase_label:
 		phase_label.text = tr("DEFENDER")
 		phase_label.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_BLUE)
 
 	if GameState.attack_data.is_capital:
-		title_label.text = tr("%s's Capital Defense") % GameState.players[def_idx].name
-		initial_budget = 75000
+		title_label.text = tr("%s's Capital Defense") % p.name
+		# If the player's army is larger than the 75k floor, they use their full army for capital defense.
+		initial_budget = max(75000, p.army)
 	else:
-		title_label.text = tr("%s's Defense Force") % GameState.players[def_idx].name
-		initial_budget = GameState.players[def_idx].army
+		title_label.text = tr("%s's Defense Force") % p.name
+		initial_budget = p.army
 
 	current_budget = initial_budget
 
 	_reset_selection()
+	_update_ui()
+	
+	if p.get("is_bot", false):
+		print("[DEBUG TroopSelector] Defender is BOT. Auto-selecting...")
+		_auto_select_bot_army()
+		await get_tree().create_timer(1.0).timeout
+		_on_confirm()
+
+func _auto_select_bot_army():
+	# Use the logic from _generate_neutral_army but apply to selected_units
+	var budget = initial_budget
+	var army = {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0}
+	
+	var types = ["warrior", "ranger", "wizard", "rocket_launcher"]
+	while true:
+		var affordable = []
+		var weights = []
+		var total_weight = 0.0
+		
+		for t in types:
+			var cost = GameState.UNIT_COSTS[t]
+			if cost <= budget:
+				affordable.append(t)
+				var w = 1.0 / float(cost)
+				weights.append(w)
+				total_weight += w
+		
+		if affordable.is_empty():
+			break
+			
+		var roll = randf() * total_weight
+		var cumulative_weight = 0.0
+		var chosen = affordable[0]
+		
+		for i in range(affordable.size()):
+			cumulative_weight += weights[i]
+			if roll <= cumulative_weight:
+				chosen = affordable[i]
+				break
+				
+		army[chosen] += 1
+		budget -= GameState.UNIT_COSTS[chosen]
+	
+	selected_units = army
+	current_budget = budget
 	_update_ui()
 
 func _reset_selection():
@@ -312,7 +366,7 @@ func _on_confirm():
 		get_tree().change_scene_to_file("res://new_battlefield.tscn")
 
 func _generate_neutral_army():
-	var budget = GameState.attack_data.neutral_size
+	var budget = GameState.attack_data.city_value
 	var army = {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0}
 	
 	# Weighted distribution based on cost (cheaper units are more likely)
