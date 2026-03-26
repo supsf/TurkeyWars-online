@@ -5,25 +5,26 @@ const BUDGET: float = 50000.0
 const MAX_TICKS: int = 5000 # Safety timeout
 const SAVE_PATH: String = "user://balance_sim_results.json"
 
-var melee_cost: float = 280.0
-var ranged_cost: float = 550.0
-var tank_cost: float = 2000.0
-var rocket_cost: float = 1700.0
+# Costs aligned with GameState.UNIT_COSTS (warrior, ranger, wizard, rocket_launcher)
+var warrior_cost: float = 280.0
+var ranger_cost: float = 550.0
+var wizard_cost: float = 2000.0
+var rocket_launcher_cost: float = 1700.0
 
 var battles_run: int = 0
 var results: Array = []
 var is_simulating: bool = true
 
-# Updated stats as per request
+# Updated stats - Aligned with unit_2d.gd and .tscn files
 var stats = {
 	"melee": {
-		"hp": 125.0,
+		"hp": 155.0,
 		"damage": 50.0, 
 		"rate": 1.0 / 1.43,
 		"range": 2.0,
 		"speed": 4.5
 	},
-	"ranged": {
+	"range": {
 		"hp": 200.0,
 		"damage": 35.0,
 		"rate": 1.0 / 1.43,
@@ -37,7 +38,7 @@ var stats = {
 		"range": 7.0,
 		"speed": 6.0
 	},
-	"rocket": {
+	"rocket_launcher": {
 		"hp": 300.0,
 		"damage": 50.0,
 		"rate": 1.0 / 0.33,
@@ -80,7 +81,7 @@ class SimUnit:
 		attack_timer = randf() * rate
 
 func _ready() -> void:
-	print("--- Headless Balance Simulation (Rocket Launchers Included) Started ---")
+	print("--- Headless Balance Simulation Started ---")
 	print("Press F6 to restart. Saving to: ", ProjectSettings.globalize_path(SAVE_PATH))
 	randomize()
 	_save_results()
@@ -91,38 +92,38 @@ func _process(_delta: float) -> void:
 		_run_battle()
 
 func _draft_army() -> Dictionary:
-	var army = {"melee": 0, "ranged": 0, "tank": 0, "rocket": 0}
+	var army = {"melee": 0, "range": 0, "tank": 0, "rocket_launcher": 0}
 	var current = BUDGET
 	
 	while true:
-		var inv_melee = 1.0 / melee_cost
-		var inv_ranged = 1.0 / ranged_cost
-		var inv_tank = 1.0 / tank_cost
-		var inv_rocket = 1.0 / rocket_cost
-		var total_weight = inv_melee + inv_ranged + inv_tank + inv_rocket
+		var inv_melee = 1.0 / warrior_cost
+		var inv_range = 1.0 / ranger_cost
+		var inv_tank = 1.0 / wizard_cost
+		var inv_rocket = 1.0 / rocket_launcher_cost
+		var total_weight = inv_melee + inv_range + inv_tank + inv_rocket
 		
 		var roll = randf() * total_weight
 		var choice = ""
 		
 		if roll < inv_melee: choice = "melee"
-		elif roll < inv_melee + inv_ranged: choice = "ranged"
-		elif roll < inv_melee + inv_ranged + inv_tank: choice = "tank"
-		else: choice = "rocket"
+		elif roll < inv_melee + inv_range: choice = "range"
+		elif roll < inv_melee + inv_range + inv_tank: choice = "tank"
+		else: choice = "rocket_launcher"
 		
 		var cost = 0.0
-		if choice == "melee": cost = melee_cost
-		elif choice == "ranged": cost = ranged_cost
-		elif choice == "tank": cost = tank_cost
-		else: cost = rocket_cost
+		if choice == "melee": cost = warrior_cost
+		elif choice == "range": cost = ranger_cost
+		elif choice == "tank": cost = wizard_cost
+		else: cost = rocket_launcher_cost
 		
 		if current >= cost:
 			army[choice] += 1
 			current -= cost
 		else:
 			# Fallback to cheapest or break
-			if current >= melee_cost:
+			if current >= warrior_cost:
 				army["melee"] += 1
-				current -= melee_cost
+				current -= warrior_cost
 			else:
 				break
 	return army
@@ -171,16 +172,16 @@ func _find_best_target(u: SimUnit, all_units: Array) -> SimUnit:
 	var best_dist = 999999.0
 	var best_target: SimUnit = null
 	
-	# Rocket Priority logic: target "ranged" (riflemen) units first
-	var prioritize_ranged = (u.type == "rocket")
-	var ranged_enemies = []
-	if prioritize_ranged:
+	# Rocket Launcher Priority logic: target "range" (riflemen) units first
+	var prioritize_range = (u.type == "rocket_launcher")
+	var range_enemies = []
+	if prioritize_range:
 		for e in all_units:
-			if e.hp > 0 and e.team != u.team and e.type == "ranged":
-				ranged_enemies.append(e)
+			if e.hp > 0 and e.team != u.team and e.type == "range":
+				range_enemies.append(e)
 	
-	# If rocket and there are ranged enemies, only look at them
-	var targets_to_search = ranged_enemies if not ranged_enemies.is_empty() else all_units
+	# If rocket launcher and there are range enemies, only look at them
+	var targets_to_search = range_enemies if not range_enemies.is_empty() else all_units
 	
 	for e in targets_to_search:
 		if e.hp > 0 and e.team != u.team:
@@ -218,12 +219,12 @@ func _determine_and_record_winner(t0_comp, t1_comp, units):
 func _spawn_team(units: Array, team_idx: int, comp: Dictionary, offset: float):
 	for i in range(comp["melee"]):
 		units.append(SimUnit.new("melee", team_idx, stats["melee"], Vector2(offset + randf_range(-5, 5), randf_range(-15, 15))))
-	for i in range(comp["ranged"]):
-		units.append(SimUnit.new("ranged", team_idx, stats["ranged"], Vector2(offset * 1.5 + randf_range(-5, 5), randf_range(-15, 15))))
+	for i in range(comp["range"]):
+		units.append(SimUnit.new("range", team_idx, stats["range"], Vector2(offset * 1.5 + randf_range(-5, 5), randf_range(-15, 15))))
 	for i in range(comp["tank"]):
 		units.append(SimUnit.new("tank", team_idx, stats["tank"], Vector2(offset * 2.0 + randf_range(-5, 5), randf_range(-15, 15))))
-	for i in range(comp["rocket"]):
-		units.append(SimUnit.new("rocket", team_idx, stats["rocket"], Vector2(offset * 2.5 + randf_range(-5, 5), randf_range(-15, 15))))
+	for i in range(comp["rocket_launcher"]):
+		units.append(SimUnit.new("rocket_launcher", team_idx, stats["rocket_launcher"], Vector2(offset * 2.5 + randf_range(-5, 5), randf_range(-15, 15))))
 
 func _adjust_costs(winner: int, t0: Dictionary, t1: Dictionary) -> void:
 	if winner == -1: return
@@ -231,35 +232,35 @@ func _adjust_costs(winner: int, t0: Dictionary, t1: Dictionary) -> void:
 	var win_comp = t0 if winner == 0 else t1
 	var lose_comp = t1 if winner == 0 else t0
 	
-	var win_total = float(win_comp["melee"] + win_comp["ranged"] + win_comp["tank"] + win_comp["rocket"])
-	var lose_total = float(lose_comp["melee"] + lose_comp["ranged"] + lose_comp["tank"] + lose_comp["rocket"])
+	var win_total = float(win_comp["melee"] + win_comp["range"] + win_comp["tank"] + win_comp["rocket_launcher"])
+	var lose_total = float(lose_comp["melee"] + lose_comp["range"] + lose_comp["tank"] + lose_comp["rocket_launcher"])
 	
 	if win_total == 0 or lose_total == 0: return
 	
-	var r_diff = (float(win_comp["ranged"]) / win_total) - (float(lose_comp["ranged"]) / lose_total)
+	var r_diff = (float(win_comp["range"]) / win_total) - (float(lose_comp["range"]) / lose_total)
 	var m_diff = (float(win_comp["melee"]) / win_total) - (float(lose_comp["melee"]) / lose_total)
 	var t_diff = (float(win_comp["tank"]) / win_total) - (float(lose_comp["tank"]) / lose_total)
-	var rk_diff = (float(win_comp["rocket"]) / win_total) - (float(lose_comp["rocket"]) / lose_total)
+	var rk_diff = (float(win_comp["rocket_launcher"]) / win_total) - (float(lose_comp["rocket_launcher"]) / lose_total)
 	
 	var adj = 20.0
-	ranged_cost += r_diff * adj
-	melee_cost += m_diff * adj
-	tank_cost += t_diff * adj * 5.0
-	rocket_cost += rk_diff * adj * 3.0
+	ranger_cost += r_diff * adj
+	warrior_cost += m_diff * adj
+	wizard_cost += t_diff * adj * 5.0
+	rocket_launcher_cost += rk_diff * adj * 3.0
 	
-	ranged_cost = clamp(ranged_cost, 50.0, 5000.0)
-	melee_cost = clamp(melee_cost, 50.0, 5000.0)
-	tank_cost = clamp(tank_cost, 500.0, 10000.0)
-	rocket_cost = clamp(rocket_cost, 200.0, 8000.0)
+	ranger_cost = clamp(ranger_cost, 50.0, 5000.0)
+	warrior_cost = clamp(warrior_cost, 50.0, 5000.0)
+	wizard_cost = clamp(wizard_cost, 500.0, 10000.0)
+	rocket_launcher_cost = clamp(rocket_launcher_cost, 200.0, 8000.0)
 	
 	battles_run += 1
 	results.append({
 		"battle_id": battles_run,
-		"costs": {"m": int(melee_cost), "r": int(ranged_cost), "t": int(tank_cost), "rk": int(rocket_cost)}
+		"costs": {"w": int(warrior_cost), "r": int(ranger_cost), "wi": int(wizard_cost), "rk": int(rocket_launcher_cost)}
 	})
 	
 	if battles_run % 20 == 0:
-		print("B: %d | M: %d | R: %d | T: %d | RK: %d" % [battles_run, int(melee_cost), int(ranged_cost), int(tank_cost), int(rocket_cost)])
+		print("B: %d | W: %d | R: %d | WI: %d | RK: %d" % [battles_run, int(warrior_cost), int(ranger_cost), int(wizard_cost), int(rocket_launcher_cost)])
 		_save_results()
 
 func _save_results() -> void:

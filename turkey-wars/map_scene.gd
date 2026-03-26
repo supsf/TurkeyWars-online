@@ -3,6 +3,7 @@ extends Node2D
 var _hovered_area: Area2D = null
 var game_data: Dictionary = {}
 var session_data: Dictionary = {}
+var province_labels: Dictionary = {}
 
 var players: Array = []
 var turn_index: int = 0
@@ -36,6 +37,34 @@ func _ready():
 			child.mouse_entered.connect(_on_area_mouse_entered.bind(child))
 			child.mouse_exited.connect(_on_area_mouse_exited.bind(child))
 			child.input_event.connect(_on_area_input_event.bind(child))
+			
+			var province_id = child.name
+			if game_data.has(province_id):
+				var label = Label.new()
+				label.name = "ArmyLabel"
+				
+				var polygon_node = null
+				for grandchild in child.get_children():
+					if grandchild is Polygon2D:
+						polygon_node = grandchild
+						break
+				
+				if polygon_node:
+					var points = polygon_node.polygon
+					if points.size() > 0:
+						var min_pos = points[0]
+						var max_pos = points[0]
+						for p in points:
+							min_pos.x = min(min_pos.x, p.x)
+							min_pos.y = min(min_pos.y, p.y)
+							max_pos.x = max(max_pos.x, p.x)
+							max_pos.y = max(max_pos.y, p.y)
+						var center = (min_pos + max_pos) / 2
+						label.position = center - Vector2(30, 15)
+						label.size = Vector2(60, 30)
+
+				child.add_child(label)
+				province_labels[province_id] = label
 
 	_update_ui()
 	_update_colors()
@@ -58,11 +87,21 @@ func _setup_map_background() -> void:
 
 func _setup_camera() -> void:
 	var cam := Camera2D.new()
-	# Shift camera RIGHT (move map LEFT visually) and reduce zoom
 	cam.position = Vector2(600.0, 220.0)
-	cam.zoom     = Vector2(1.5, 1.5)
 	add_child(cam)
 	cam.make_current()
+
+	var base_width = 1920.0
+	var base_height = 1080.0
+	var current_width = get_viewport_rect().size.x
+	var current_height = get_viewport_rect().size.y
+
+	var zoom_factor_x = base_width / current_width
+	var zoom_factor_y = base_height / current_height
+	
+	# Use the larger zoom factor to ensure content fits within the smaller dimension
+	# and then adjust based on the original 1.5 zoom.
+	cam.zoom = Vector2(max(zoom_factor_x, zoom_factor_y) * 1.5, max(zoom_factor_x, zoom_factor_y) * 1.5)
 
 
 func _setup_map_hud() -> void:
@@ -396,7 +435,7 @@ func _execute_attack(province_name: String):
 	var attacker_size = int(players[turn_index].get("army", 0))
 	var ratio = float(defender_size_for_ratio) / float(attacker_size) if attacker_size > 0 else 999.0
 	var is_blitz = false
-	if def_idx == -1 and ratio < 0.6:
+	if def_idx == -1 and ratio < 0.85:
 		is_blitz = true
 	elif def_idx != -1 and ratio < 0.4:
 		is_blitz = true
@@ -557,7 +596,7 @@ func _on_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, a
 			var attacker_size = int(players[turn_index].get("army", 0))
 			var ratio = float(defender_size_for_ratio) / float(attacker_size) if attacker_size > 0 else 999.0
 			var is_blitz = false
-			if def_idx == -1 and ratio < 0.6:
+			if def_idx == -1 and ratio < 0.85:
 				is_blitz = true
 			elif def_idx != -1 and ratio < 0.4:
 				is_blitz = true
@@ -700,6 +739,26 @@ func _on_area_mouse_exited(area: Area2D):
 		tooltip_panel.visible = false
 	_update_colors()
 
+func _update_army_labels():
+	for province_id in province_labels:
+		var label = province_labels[province_id]
+		if not is_instance_valid(label):
+			continue
+
+		var army = game_data[province_id].initial_army
+		label.text = str(int(army / 1000))
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+		var owner_idx = province_owners.get(province_id, -1)
+		if owner_idx != -1:
+			var player_color = Color(players[owner_idx].color)
+			label.add_theme_color_override("font_color", player_color.lerp(Color.BLACK, 0.5))
+
+		else:
+			label.add_theme_color_override("font_color", Color.BLACK)
+
+
 func _update_colors():
 	for child in get_children():
 		if child is Area2D:
@@ -754,3 +813,4 @@ func _update_colors():
 			for node in child.get_children():
 				if node is Polygon2D:
 					node.color = target_color
+	_update_army_labels()

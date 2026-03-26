@@ -28,33 +28,112 @@ var battle_ended_flag = false
 var initial_spawn_done = false
 
 func _ready() -> void:
-	# Initialize the spring afternoon environment when the scene loads
+	# Initialize a random environment when the scene loads
 	_setup_hud()
-	_create_spring_afternoon_environment()
+	_setup_random_environment()
 
-func _create_spring_afternoon_environment() -> void:
+func _setup_random_environment() -> void:
+	var env_configs = [
+		{
+			"name": "Spring Afternoon",
+			"sun_rot": Vector3(-25.0, 250.0, 0.0),
+			"sun_color": Color(1.0, 0.92, 0.82),
+			"sky_top": Color(0.25, 0.55, 0.85),
+			"sky_horizon": Color(0.65, 0.75, 0.85),
+			"exposure": 1.05
+		},
+		{
+			"name": "High Noon Summer",
+			"sun_rot": Vector3(-85.0, 0.0, 0.0),
+			"sun_color": Color(1.0, 1.0, 0.95),
+			"sky_top": Color(0.1, 0.4, 0.8),
+			"sky_horizon": Color(0.5, 0.7, 0.9),
+			"exposure": 1.2
+		},
+		{
+			"name": "Golden Hour Sunset",
+			"sun_rot": Vector3(-5.0, 260.0, 0.0),
+			"sun_color": Color(1.0, 0.6, 0.2),
+			"sky_top": Color(0.1, 0.2, 0.5),
+			"sky_horizon": Color(1.0, 0.4, 0.1),
+			"exposure": 1.1
+		},
+		{
+			"name": "Overcast Winter",
+			"sun_rot": Vector3(-30.0, 180.0, 0.0),
+			"sun_color": Color(0.8, 0.8, 0.9),
+			"sky_top": Color(0.4, 0.4, 0.5),
+			"sky_horizon": Color(0.6, 0.6, 0.7),
+			"exposure": 0.9
+		},
+		{
+			"name": "Moonlight Night",
+			"sun_rot": Vector3(-45.0, 45.0, 0.0),
+			"sun_color": Color(0.3, 0.4, 0.6),
+			"sky_top": Color(0.02, 0.05, 0.1),
+			"sky_horizon": Color(0.05, 0.1, 0.2),
+			"exposure": 0.6
+		},
+		{
+			"name": "Early Autumn Morning",
+			"sun_rot": Vector3(-15.0, 90.0, 0.0),
+			"sun_color": Color(1.0, 0.85, 0.7),
+			"sky_top": Color(0.3, 0.5, 0.7),
+			"sky_horizon": Color(0.9, 0.7, 0.5),
+			"exposure": 1.0
+		},
+		{
+			"name": "Stormy Sky",
+			"sun_rot": Vector3(-40.0, 210.0, 0.0),
+			"sun_color": Color(0.7, 0.7, 0.8),
+			"sky_top": Color(0.2, 0.2, 0.25),
+			"sky_horizon": Color(0.4, 0.4, 0.45),
+			"exposure": 0.85
+		},
+		{
+			"name": "Martian Red",
+			"sun_rot": Vector3(-35.0, 120.0, 0.0),
+			"sun_color": Color(1.0, 0.5, 0.3),
+			"sky_top": Color(0.5, 0.2, 0.1),
+			"sky_horizon": Color(0.8, 0.4, 0.2),
+			"exposure": 1.0
+		},
+		{
+			"name": "Deep Space Nebula",
+			"sun_rot": Vector3(-10.0, -10.0, 0.0),
+			"sun_color": Color(0.8, 0.2, 0.9),
+			"sky_top": Color(0.1, 0.0, 0.2),
+			"sky_horizon": Color(0.3, 0.0, 0.5),
+			"exposure": 0.75
+		},
+		{
+			"name": "Alien Green",
+			"sun_rot": Vector3(-60.0, 180.0, 0.0),
+			"sun_color": Color(0.7, 1.0, 0.7),
+			"sky_top": Color(0.0, 0.2, 0.0),
+			"sky_horizon": Color(0.2, 0.5, 0.2),
+			"exposure": 1.0
+		}
+	]
+	
+	var config = env_configs[randi() % env_configs.size()]
+	print("Loading Environment: ", config["name"])
+
 	# 1. Setup the Sun (DirectionalLight3D)
 	var sun := DirectionalLight3D.new()
-	sun.name = "Sun_430PM"
-	
-	# 4:30 PM Positioning: 
-	# X = -25° (Sun is getting lower), Y = 250° (Setting in the West/South-West)
-	sun.rotation_degrees = Vector3(-25.0, 250.0, 0.0)
-	
-	# Spring lighting: Bright, clear, with a slight late-afternoon warmth
-	sun.light_color = Color(1.0, 0.92, 0.82)
+	sun.name = "Sun"
+	sun.rotation_degrees = config["sun_rot"]
+	sun.light_color = config["sun_color"]
 	sun.light_energy = 1.2
 	sun.shadow_enabled = false
-	sun.shadow_blur = 1.5 # Soften shadows for a clear spring day
-	
 	add_child(sun)
 
-	# 2. Setup the Sky Material (ProceduralSkyMaterial)
+	# 2. Setup the Sky Material
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.25, 0.55, 0.85) # Crisp blue spring sky
-	sky_material.sky_horizon_color = Color(0.65, 0.75, 0.85) # Slight atmospheric haze at the horizon
-	sky_material.ground_bottom_color = Color(0.15, 0.20, 0.15) # Earthy green reflection from spring grass
-	sky_material.ground_horizon_color = Color(0.65, 0.75, 0.85)
+	sky_material.sky_top_color = config["sky_top"]
+	sky_material.sky_horizon_color = config["sky_horizon"]
+	sky_material.ground_bottom_color = config["sky_top"].darkened(0.8)
+	sky_material.ground_horizon_color = config["sky_horizon"]
 	
 	# 3. Apply Material to a Sky Resource
 	var sky := Sky.new()
@@ -64,17 +143,11 @@ func _create_spring_afternoon_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	
-	# Lighting and Tonemapping
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_color = Color(0.6, 0.7, 0.8)
-	env.ambient_light_energy = 1.0
-	
-	# ACES Tonemapping is highly recommended in Godot 4 for realistic light handling
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = config["exposure"]
 	
-	# Explicitly disable expensive effects for optimization
+	# Optimization
 	env.volumetric_fog_enabled = false
 	env.ssao_enabled = false
 	env.ssil_enabled = false
@@ -85,11 +158,8 @@ func _create_spring_afternoon_environment() -> void:
 	var world_env := WorldEnvironment.new()
 	world_env.name = "WorldEnvironment"
 	world_env.environment = env
-
 	add_child(world_env)
-	print("Godot 4.6: 4:30 PM Spring Clear Sky loaded successfully.")
 	
-	# After environment setup, spawn 2D units
 	_spawn_armies()
 
 	var bgm = AudioStreamPlayer.new()
@@ -100,6 +170,10 @@ func _create_spring_afternoon_environment() -> void:
 	bgm.volume_db = -8.0
 	bgm.autoplay = true
 	add_child(bgm)
+
+func _create_spring_afternoon_environment() -> void:
+	# This function is now deprecated in favor of _setup_random_environment
+	pass
 
 func _spawn_armies():
 	# Allow some engine frames for things to settle
@@ -153,6 +227,21 @@ func _spawn_unit(team: int, is_backline: bool, scene: PackedScene):
 	var unit = scene.instantiate()
 	unit.team = team
 	unit.is_backline = is_backline
+	
+	# Apply Buffs and Nerfs
+	if unit.unit_class == GameState.attack_data.buffed_unit:
+		unit.hp *= 2.0
+		unit.attack_damage *= 2.0
+		if unit.aoe_damage > 0:
+			unit.aoe_damage *= 2.0
+		print("[DEBUG Zez] Buffed Unit Spawned: ", unit.unit_class, " | HP: ", unit.hp, " | DMG: ", unit.attack_damage)
+	elif unit.unit_class == GameState.attack_data.nerfed_unit:
+		unit.hp *= 0.5
+		unit.attack_damage *= 0.5
+		if unit.aoe_damage > 0:
+			unit.aoe_damage *= 0.5
+		print("[DEBUG Zez] Nerfed Unit Spawned: ", unit.unit_class, " | HP: ", unit.hp, " | DMG: ", unit.attack_damage)
+
 	get_parent().add_child(unit)
 	
 	var sx = spawner_node.scale.x
@@ -190,6 +279,7 @@ func _setup_hud():
 	attacker_card.offset_top = 20
 	attacker_card.offset_right = 350
 	attacker_card.offset_bottom = 220
+	attacker_card.custom_minimum_size.x = 330
 	root.add_child(attacker_card)
 	TWUIStyle.style_panel_container_accent(attacker_card)
 
@@ -202,6 +292,8 @@ func _setup_hud():
 	TWUIStyle.style_label(attackers_title_lbl, true)
 	attackers_title_lbl.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_RED)
 	attackers_title_lbl.add_theme_font_size_override("font_size", 48)
+	attackers_title_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	attackers_title_lbl.custom_minimum_size.x = 300
 	attacker_vbox.add_child(attackers_title_lbl)
 
 	attacker_unit_labels = _create_unit_breakdown(attacker_vbox, TWUIStyle.COLOR_ACCENT_RED)
@@ -214,6 +306,7 @@ func _setup_hud():
 	defender_card.offset_top = 20
 	defender_card.offset_right = -20
 	defender_card.offset_bottom = 220
+	defender_card.custom_minimum_size.x = 330
 	root.add_child(defender_card)
 	var def_card_sb := TWUIStyle.make_card_accent_stylebox()
 	def_card_sb.border_color = TWUIStyle.COLOR_ACCENT_BLUE
@@ -229,6 +322,8 @@ func _setup_hud():
 	TWUIStyle.style_label(defenders_title_lbl, true)
 	defenders_title_lbl.add_theme_color_override("font_color", TWUIStyle.COLOR_ACCENT_BLUE)
 	defenders_title_lbl.add_theme_font_size_override("font_size", 48)
+	defenders_title_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	defenders_title_lbl.custom_minimum_size.x = 300
 	defender_vbox.add_child(defenders_title_lbl)
 
 	defender_unit_labels = _create_unit_breakdown(defender_vbox, TWUIStyle.COLOR_ACCENT_BLUE, true)

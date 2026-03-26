@@ -21,6 +21,8 @@ var attack_data = {
 	"province": "",
 	"attacker_army": {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0},
 	"defender_army": {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0},
+	"buffed_unit": "",
+	"nerfed_unit": "",
 	"is_capital": false,
 	"city_value": 0
 }
@@ -85,6 +87,10 @@ func resolve_battle(attacker_won: bool):
 	var city_value = attack_data.city_value
 	
 	print("[DEBUG GameState] Resolving Battle: ", prov, " Won: ", attacker_won)
+
+	# Reset buffs/nerfs for the next battle
+	attack_data.buffed_unit = ""
+	attack_data.nerfed_unit = ""
 
 	var bonus = city_value / 10
 	

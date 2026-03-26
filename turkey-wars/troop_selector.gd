@@ -26,6 +26,14 @@ var selected_units = {
 var unit_labels = {}
 
 func _ready():
+	# Pick a buffed and nerfed unit if it's the start of the battle
+	if GameState.attack_data.buffed_unit == "":
+		var units = ["warrior", "ranger", "rocket_launcher", "wizard"]
+		units.shuffle()
+		GameState.attack_data.buffed_unit = units[0]
+		GameState.attack_data.nerfed_unit = units[1]
+		print("[DEBUG TroopSelector] Buffed: ", GameState.attack_data.buffed_unit, " | Nerfed: ", GameState.attack_data.nerfed_unit)
+
 	_setup_ui()
 	_start_attacker_phase()
 
@@ -135,8 +143,16 @@ func _setup_ui():
 
 		var name_lbl := Label.new()
 		name_lbl.text = display_name
+		if unit_type == GameState.attack_data.buffed_unit:
+			name_lbl.text += " (BUFFED)"
+			name_lbl.add_theme_color_override("font_color", Color.GREEN)
+		elif unit_type == GameState.attack_data.nerfed_unit:
+			name_lbl.text += " (NERFED)"
+			name_lbl.add_theme_color_override("font_color", Color.RED)
+		else:
+			TWUIStyle.style_label(name_lbl, true)
+
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		TWUIStyle.style_label(name_lbl, true)
 		name_lbl.add_theme_font_size_override("font_size", 17)
 		hbox.add_child(name_lbl)
 
@@ -267,6 +283,22 @@ func _auto_select_bot_army():
 	var budget = initial_budget
 	var army = {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0}
 	
+	# --- ROCKET WEIGHT MODIFIER FOR DEFENDER ---
+	var rocket_mod = 1.0
+	if not is_attacker_phase:
+		var att_army = GameState.attack_data.attacker_army
+		var total_att_points = 0.0
+		for t in att_army:
+			total_att_points += att_army[t] * GameState.UNIT_COSTS[t]
+		
+		if total_att_points > 0:
+			var rifle_points = att_army["ranger"] * GameState.UNIT_COSTS["ranger"]
+			var rifle_ratio = rifle_points / total_att_points
+			# Weight increases by up to 5x if attacker is 100% riflemen
+			rocket_mod = 1.0 + (rifle_ratio * 4.0) 
+			print("[DEBUG BotArmy] Attacker Rifle Ratio: ", rifle_ratio, " | Rocket Weight Mod: ", rocket_mod)
+	# -------------------------------------------
+
 	var types = ["warrior", "ranger", "wizard", "rocket_launcher"]
 	while true:
 		var affordable = []
@@ -278,6 +310,8 @@ func _auto_select_bot_army():
 			if cost <= budget:
 				affordable.append(t)
 				var w = 1.0 / float(cost)
+				if t == "rocket_launcher":
+					w *= rocket_mod
 				weights.append(w)
 				total_weight += w
 		
@@ -369,6 +403,20 @@ func _generate_neutral_army():
 	var budget = GameState.attack_data.city_value
 	var army = {"warrior": 0, "ranger": 0, "wizard": 0, "rocket_launcher": 0}
 	
+	# --- ROCKET WEIGHT MODIFIER FOR NEUTRAL DEFENDER ---
+	var att_army = GameState.attack_data.attacker_army
+	var total_att_points = 0.0
+	for t in att_army:
+		total_att_points += att_army[t] * GameState.UNIT_COSTS[t]
+	
+	var rocket_mod = 1.0
+	if total_att_points > 0:
+		var rifle_points = att_army["ranger"] * GameState.UNIT_COSTS["ranger"]
+		var rifle_ratio = rifle_points / total_att_points
+		rocket_mod = 1.0 + (rifle_ratio * 4.0) 
+		print("[DEBUG NeutralArmy] Attacker Rifle Ratio: ", rifle_ratio, " | Rocket Weight Mod: ", rocket_mod)
+	# -------------------------------------------
+
 	# Weighted distribution based on cost (cheaper units are more likely)
 	var types = ["warrior", "ranger", "wizard", "rocket_launcher"]
 	while true:
@@ -382,6 +430,8 @@ func _generate_neutral_army():
 				affordable.append(t)
 				# Weight is inversely proportional to cost
 				var w = 1.0 / float(cost)
+				if t == "rocket_launcher":
+					w *= rocket_mod
 				weights.append(w)
 				total_weight += w
 		
